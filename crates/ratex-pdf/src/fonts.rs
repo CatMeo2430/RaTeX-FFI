@@ -6,11 +6,11 @@ use ab_glyph::Font as _;
 use pdf_writer::{types::*, Filter, Finish, Name, Pdf, Ref, Str};
 use ratex_font::FontId;
 use ratex_font_loader::FontSet;
-use skrifa::instance::{LocationRef, Size};
+use skrifa::instance::{Location, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::raw::FontRef as SfFontRef;
 use skrifa::raw::TableProvider;
-use skrifa::{GlyphId, MetadataProvider};
+use skrifa::{GlyphId, MetadataProvider, Tag};
 use subsetter::GlyphRemapper;
 
 /// Loaded TTF bytes keyed by FontId.
@@ -43,6 +43,27 @@ fn skrifa_collection_index(face_id: FontId) -> u32 {
 /// supplementary-plane emoji in `KaTeX_Main-Regular` to a non-zero GID while `ab_glyph` (and our
 /// layout) treat them as absent — that would make [`resolve_pdf_glyph`] stop at `MainRegular` and
 /// never reach [`FontId::EmojiFallback`], so color emoji rasters were never collected or drawn.
+///
+/// If the font has a `wght` variation axis, return the weight to use.
+/// Prefers Regular (400) and falls back to the axis default if 400 is out of range.
+fn variable_weight(font: &SfFontRef) -> Option<f32> {
+    let axes = font.axes();
+    let wght_axis = axes.get_by_tag(Tag::new(b"wght"))?;
+
+    Some(if wght_axis.min_value() <= 400.0 && 400.0 <= wght_axis.max_value() {
+        400.0
+    } else {
+        wght_axis.default_value()
+    })
+}
+
+/// If the font has a `wght` variation axis, return a `Location` targeting the selected weight.
+fn variable_location(font: &SfFontRef) -> Option<Location> {
+    let target_weight = variable_weight(font)?;
+    Some(font.axes().location([("wght", target_weight)]))
+}
+
+/// Always use `ab_glyph` / OpenType cmap so PDF glyph selection stays aligned with layout.
 #[inline]
 fn resolve_glyph_id_for_face(raw_bytes: &[u8], font_id: FontId, char_code: u32) -> Option<u16> {
     resolve_glyph_id_abglyph(raw_bytes, font_id, char_code)
@@ -77,7 +98,9 @@ pub(crate) fn glyph_has_nonempty_outline(raw_bytes: &[u8], face_id: FontId, gid:
         fn close(&mut self) {}
     }
     let mut pen = PenStats::default();
-    let settings = DrawSettings::unhinted(Size::new(16.0), LocationRef::default());
+    // For non-variable fonts, use default Location; for variable fonts, use the computed location.
+    let location = variable_location(&font).unwrap_or_default();
+    let settings = DrawSettings::unhinted(Size::new(16.0), &location);
     glyph.draw(settings, &mut pen).is_ok() && pen.draws > 0
 }
 
@@ -430,15 +453,20 @@ pub(crate) fn embed_fonts(
         }
 
         // Subset the font.
-        let subsetted = subsetter::subset(raw, skrifa_collection_index(usage.font_id), &remapper)
-            .map_err(|e| format!("Subset error for {:?}: {e}", usage.font_id))?;
+        let index = skrifa_collection_index(usage.font_id);
+        let sf = SfFontRef::from_index(raw, index)
+            .map_err(|e| format!("skrifa error: {e}"))?;
+        let subsetted = if let Some(target_weight) = variable_weight(&sf) {
+            let coords = [(subsetter::Tag::new(b"wght"), target_weight)];
+            subsetter::subset_with_variations(raw, index, &coords, &remapper)
+        } else {
+            subsetter::subset(raw, index, &remapper)
+        }.map_err(|e| format!("Subset error for {:?}: {e}", usage.font_id))?;
 
         // Compress the subset.
         let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&subsetted, 6);
 
         // Read font metrics via skrifa.
-        let sf = SfFontRef::from_index(raw, skrifa_collection_index(usage.font_id))
-            .map_err(|e| format!("skrifa error: {e}"))?;
         let upem = sf.head().map_err(|_| "no head table")?.units_per_em() as f32;
         let scale = 1000.0 / upem; // PDF uses 1000 units per em for metrics
 
@@ -462,13 +490,26 @@ pub(crate) fn embed_fonts(
         };
 
         // Glyph widths (in 1000-unit space).
-        let hmtx = sf.hmtx().map_err(|_| "no hmtx table")?;
+        let location = variable_location(&sf);
         let mut widths: Vec<(u16, f32)> = Vec::new();
-        for &old_gid in usage.glyphs.keys() {
-            let new_cid = remapper.get(old_gid).unwrap_or(0);
-            let gid = skrifa::raw::types::GlyphId::new(old_gid as u32);
-            let advance = hmtx.advance(gid).unwrap_or(0) as f32 * scale;
-            widths.push((new_cid, advance));
+        if let Some(ref loc) = location {
+            // Use variation-aware glyph metrics for variable fonts.
+            let glyph_metrics = sf.glyph_metrics(Size::unscaled(), loc);
+            for &old_gid in usage.glyphs.keys() {
+                let new_cid = remapper.get(old_gid).unwrap_or(0);
+                let gid = skrifa::raw::types::GlyphId::new(old_gid as u32);
+                let advance = glyph_metrics.advance_width(gid).unwrap_or(0.0) * scale;
+                widths.push((new_cid, advance));
+            }
+        } else {
+            // Static font: read directly from hmtx table.
+            let hmtx = sf.hmtx().map_err(|_| "no hmtx table")?;
+            for &old_gid in usage.glyphs.keys() {
+                let new_cid = remapper.get(old_gid).unwrap_or(0);
+                let gid = skrifa::raw::types::GlyphId::new(old_gid as u32);
+                let advance = hmtx.advance(gid).unwrap_or(0) as f32 * scale;
+                widths.push((new_cid, advance));
+            }
         }
         widths.sort_by_key(|(cid, _)| *cid);
 

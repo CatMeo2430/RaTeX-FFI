@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, RwLock};
 
-use ab_glyph::{Font, FontRef, GlyphId, OutlineCurve};
+use ab_glyph::{Font, FontRef, GlyphId, OutlineCurve, VariableFont};
 use ratex_font::FontId;
 
 type OutlineData = Arc<[OutlineCurve]>;
@@ -20,6 +20,8 @@ static OUTLINE_CACHE: LazyLock<RwLock<HashMap<(FontId, GlyphId), OutlineData>>> 
 ///
 /// Position and scale are **not** applied — callers must transform the curves
 /// with their own `px`, `py`, and `em` values before rasterising or serializing.
+///
+/// For variable fonts, sets `wght=400` (Regular) if the axis exists and supports it.
 pub fn get_or_compute_outline(
     font_id: FontId,
     font: &FontRef<'_>,
@@ -36,7 +38,24 @@ pub fn get_or_compute_outline(
     }
 
     // Slow path: compute outline + write-lock
-    let outline = font.outline(glyph_id)?;
+    // For variable fonts, set wght=400 if available
+    let mut font_instance = font.clone();
+    let axes = font_instance.variations();
+    if !axes.is_empty() {
+        for axis in axes {
+            if &axis.tag == b"wght" {
+                let target_weight = if axis.min_value <= 400.0 && 400.0 <= axis.max_value {
+                    400.0
+                } else {
+                    axis.default_value
+                };
+                font_instance.set_variation(b"wght", target_weight);
+                break;
+            }
+        }
+    }
+
+    let outline = font_instance.outline(glyph_id)?;
     let curves: Arc<[OutlineCurve]> = outline.curves.into();
 
     let mut cache = OUTLINE_CACHE.write().unwrap();
