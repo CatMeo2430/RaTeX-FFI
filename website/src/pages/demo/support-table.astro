@@ -9,7 +9,7 @@ interface Props {
 const { lang = "en" } = Astro.props;
 const t = useTranslations(lang);
 const base = import.meta.env.BASE_URL;
-/** Mean of GOLDEN_SCORES in public/demo-support-table.js (1057 rows; global #380 has no RaTeX PNG). */
+/** Mean of GOLDEN_SCORES in public/demo-support-table.js (recompute after regenerating that file). */
 const offlineScoreMean = "0.90";
 
 const filterActive =
@@ -20,7 +20,7 @@ const filterIdle =
 
 <BaseLayout
   title="RaTeX — Formula support table"
-  description={`1058 golden formulas (incl. mhchem \\ce / \\pu): RaTeX WASM vs KaTeX 0.16.45, ink IoU vs reference PNGs (batch mean ≈ ${offlineScoreMean} on scored rows). Live RaTeX column in your browser.`}
+  description={`Main golden suite vs KaTeX 0.16.45: ink IoU vs reference PNGs (batch mean ≈ ${offlineScoreMean} on scored rows; line count tracks \`tests/golden/test_cases.txt\`). Live RaTeX column in your browser.`}
   active="demo"
   lang={lang}
   copyright={t.footer.copyright}
@@ -261,7 +261,7 @@ const filterIdle =
       >
         <div class="flex flex-wrap gap-2 items-center" role="toolbar" aria-label="Filter formulas">
           <button type="button" class={filterActive} data-filter="all">
-            {t.supportTable.filterAll} <span id="b-all">1058</span>
+            {t.supportTable.filterAll} <span id="b-all">…</span>
           </button>
           <button type="button" class={filterIdle} data-filter="great">
             {t.supportTable.filterGreat} <span id="b-great">—</span>

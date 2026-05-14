@@ -29,6 +29,8 @@ Reference PNGs live under `tests/golden/fixtures/`. Regenerate RaTeX outputs wit
 
 Comparison helpers: `tools/golden_compare/`, and `crates/ratex-render/tests/golden_test.rs`. Some cases score lower than others due to font subpixel rendering, anti-aliasing, or layout edge differences versus KaTeX reference PNGs — that does not always indicate a visible bug.
 
+**KaTeX syntax not supported or not equivalent (command-level):** see [README.md](README.md) and [README.zh-CN.md](README.zh-CN.md) (sections *KaTeX differences (commands & DOM)* / *与 KaTeX 的差异（命令 / DOM）*).
+
 **mhchem (`\ce` / `\pu`) golden**: reference PNGs in `tests/golden/fixtures_ce/` (KaTeX + mhchem, via Puppeteer):
 
 ```bash

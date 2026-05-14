@@ -9,7 +9,8 @@ Current layout as of the codebase. RA (Rust) + TeX.
 ```
 RaTeX/
 ├── Cargo.toml                    # Workspace root
-├── README.md
+├── README.md                     # Main docs (EN); KaTeX gaps: *KaTeX differences (commands & DOM)*
+├── README.zh-CN.md               # Main docs (ZH); *与 KaTeX 的差异（命令 / DOM）*
 ├── CONTRIBUTING.md               # Build, test, golden workflow, PR notes
 ├── SECURITY.md                   # How to report vulnerabilities
 ├── LICENSE                       # MIT

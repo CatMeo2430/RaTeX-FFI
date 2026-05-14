@@ -31,7 +31,7 @@ RaTeX is the same KaTeX-compatible math engine compiled to a portable Rust core,
 | Output substrate | DOM (`<span>` tree) | DOM / SVG | **Display list → Canvas / PNG / SVG / PDF** |
 | Memory | GC / heap | GC / heap | **Predictable, no GC** |
 | Offline | Depends | Depends | **Yes** |
-| Syntax coverage | 100% | ~100% | **~99%** |
+| Syntax coverage | 100% | ~100% | **Aligned with KaTeX math syntax** |
 
 <sub>\* Embeddable in non-web targets only by hosting a WebView or headless browser, which most native and server contexts can't tolerate.</sub>
 
@@ -41,7 +41,7 @@ RaTeX is the same KaTeX-compatible math engine compiled to a portable Rust core,
 
 ## What it renders
 
-**Math** — ~99% of KaTeX syntax: fractions, radicals, integrals, matrices, environments, stretchy delimiters, and more.
+**Math** — **Aligned with KaTeX’s math syntax**: fractions, radicals, integrals, matrices, environments, stretchy delimiters, and more. The small set of DOM / trust-related extensions (e.g. `\includegraphics`, `\htmlClass`, …) is documented under *KaTeX differences (commands & DOM)* below.
 
 **Chemistry** — full mhchem support via `\ce` and `\pu`:
 
@@ -52,6 +52,16 @@ RaTeX is the same KaTeX-compatible math engine compiled to a portable Rust core,
 ```
 
 **Physics units** — `\pu` for value + unit expressions following IUPAC conventions.
+
+### KaTeX differences (commands & DOM)
+
+These are the **command-level** gaps vs KaTeX (including `trust`-style HTML). Typical math and mhchem inputs are aligned with KaTeX. Some formulas still score below 1.0 in the [support table](https://erweixin.github.io/RaTeX/demo/support-table.html) or golden ink comparison due to layout/metrics/rasterization vs reference PNGs — that is **not** the same as “missing syntax” in the table below.
+
+| KaTeX input | Notes |
+|-------------|------|
+| `\includegraphics[…]{…}` | **Not supported:** parser has no handler (undefined control sequence). |
+| `\htmlClass`, `\htmlData`, `\htmlId` | **Not equivalent:** expanded as macros that **drop** the first argument’s `class` / `data-*` / `id` and keep only the second-argument body (unlike KaTeX trusted DOM attributes). |
+| `\htmlStyle{…}{…}` | **Partial:** simple inline styling may work on Web/Canvas paths; behavior may still differ from KaTeX’s DOM-based HTML extension. |
 
 ---
 

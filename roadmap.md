@@ -2,6 +2,15 @@
 
 High-level direction (feature gaps, platforms, performance) should be tracked here as the project grows. This file is intentionally short; detailed design lives in `docs/`.
 
+## KaTeX command-level gaps (summary)
+
+The canonical **list of KaTeX commands that RaTeX does not support or does not treat equivalently** (e.g. `\includegraphics`, `\htmlClass` / `\htmlData` / `\htmlId`, and notes on `\htmlStyle`) lives in the README:
+
+- English: [README.md](README.md) — section **“KaTeX differences (commands & DOM)”**.
+- 中文: [README.zh-CN.md](README.zh-CN.md) — section **「与 KaTeX 的差异（命令 / DOM）」**.
+
+Rendering vs KaTeX reference PNGs is tracked separately via golden / support-table scores, not only by that list.
+
 ## Golden tests: mostly unnumbered display math
 
 `tests/golden/test_cases.txt` is **mostly** starred AMS environments (`equation*`, `gather*`, `align*`, `alignat*`, …) so KaTeX reference PNGs stay a **stable** baseline for ink-based comparison.
@@ -14,6 +23,10 @@ A **small** set of lines exercises **automatic numbering** (`equation`, `align`,
 - RaTeX PNGs: `scripts/update_golden_output.sh`.
 
 ---
+
+## 与 KaTeX 命令级差异（摘要）
+
+与 KaTeX 在**命令 / DOM** 层仍不一致或缺失的条目（如 `\includegraphics`、`\htmlClass` / `\htmlData` / `\htmlId`、以及 `\htmlStyle` 的说明），以 README **「与 KaTeX 的差异（命令 / DOM）」** 为准；与参考 PNG 的版式差异另见 golden / 支持表分数。
 
 ## Golden 测试：以无编号环境为主
 
