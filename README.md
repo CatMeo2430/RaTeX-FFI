@@ -53,6 +53,21 @@ RaTeX is the same KaTeX-compatible math engine compiled to a portable Rust core,
 
 **Physics units** — `\pu` for value + unit expressions following IUPAC conventions.
 
+**Proof trees** — bussproofs-style `prooftree` for inference rules and sequent calculi:
+
+```latex
+\begin{prooftree}
+\AxiomC{A \fCenter B}
+\LeftLabel{cut}
+\RightLabel{\alpha}
+\UnaryInfC{C \fCenter D}
+\end{prooftree}
+```
+
+Supported commands include `\AxiomC` / `\AXC`, unary through quinary inference commands (`\UnaryInfC`, `\BinaryInfC`, … and abbreviations such as `\UIC`, `\BIC`, `\TIC`), `\LeftLabel` / `\RightLabel` (`\LL` / `\RL`), `\solidLine` / `\singleLine`, `\dashedLine`, `\noLine`, the corresponding `\always*Line` defaults, `\rootAtTop` / `\rootAtBottom`, `\alwaysRootAtTop` / `\alwaysRootAtBottom`, and `\fCenter`.
+
+Not yet implemented from bussproofs: `\InsertBetweenHyps`, `\ScoreTree`, `\Cell`, and `\noCell`. Proof-tree golden references use MathJax’s bussproofs extension because KaTeX does not implement `prooftree`.
+
 ### KaTeX differences (commands & DOM)
 
 These are the **command-level** gaps vs KaTeX (including `trust`-style HTML). Typical math and mhchem inputs are aligned with KaTeX. Some formulas still score below 1.0 in the [support table](https://erweixin.github.io/RaTeX/demo/support-table.html) or golden ink comparison due to layout/metrics/rasterization vs reference PNGs — that is **not** the same as “missing syntax” in the table below.
@@ -117,7 +132,7 @@ flowchart LR
     A["LaTeX string\n(math · \\ce · \\pu)"]
     subgraph core["Rust core"]
         B[ratex-lexer]
-        C[ratex-parser\nmhchem · numbering · \\ce / \\pu]
+        C[ratex-parser\nmhchem · numbering · bussproofs]
         D[ratex-layout]
         E[DisplayList]
     end
@@ -143,7 +158,7 @@ flowchart LR
 | `ratex-types` | Shared types: `DisplayItem`, `DisplayList`, `Color`, `MathStyle` |
 | `ratex-font` | KaTeX-compatible font metrics and symbol tables |
 | `ratex-lexer` | LaTeX → token stream |
-| `ratex-parser` | Token stream → ParseNode AST; mhchem `\ce` / `\pu`; auto-numbering for `equation` / `align` / `gather` / `alignat` and end-of-row `\tag` / `\nonumber` / `\notag` |
+| `ratex-parser` | Token stream → ParseNode AST; mhchem `\ce` / `\pu`; bussproofs `prooftree`; auto-numbering for `equation` / `align` / `gather` / `alignat` and end-of-row `\tag` / `\nonumber` / `\notag` |
 | `ratex-layout` | AST → LayoutBox tree → DisplayList |
 | `ratex-ffi` | C ABI: exposes the full pipeline for native platforms |
 | `ratex-wasm` | WASM: pipeline → DisplayList JSON for the browser |

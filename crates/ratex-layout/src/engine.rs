@@ -4674,8 +4674,40 @@ struct ProofTreeLayout {
     width: f64,
     height: f64,
     depth: f64,
+    root_width: f64,
+    root_center_x: f64,
     children: Vec<PlacedBox>,
     rules: Vec<ProofRule>,
+}
+
+/// MathJax `bussproofs` typesets each axiom / inference **cell** with upright letters
+/// (roman), not math italic. RaTeX otherwise lays out cell bodies like ordinary math
+/// (`P` → Math-Italic). Wrap the cell in `\mathrm{...}` so single-letter conclusions
+/// match reference PNGs; relation symbols like `\Rightarrow` from `\fCenter` still
+/// fall through `layout_with_font` to default `layout_node` and keep correct spacing.
+fn layout_proof_roman_content(nodes: &[ParseNode], options: &LayoutOptions) -> LayoutBox {
+    if nodes.is_empty() {
+        return LayoutBox::new_empty();
+    }
+    let group = ParseNode::OrdGroup {
+        mode: Mode::Math,
+        body: nodes.to_vec(),
+        semisimple: None,
+        loc: None,
+    };
+    let wrapped = ParseNode::Font {
+        mode: Mode::Math,
+        font: "mathrm".to_string(),
+        body: Box::new(group),
+        loc: None,
+    };
+    layout_node(&wrapped, options)
+}
+
+fn layout_proof_cell_content(nodes: &[ParseNode], options: &LayoutOptions) -> LayoutBox {
+    let mut box_ = layout_proof_roman_content(nodes, options);
+    box_.depth = box_.depth.max(0.20);
+    box_
 }
 
 fn layout_proof_tree(tree: &ProofBranch, options: &LayoutOptions) -> LayoutBox {
@@ -4694,12 +4726,18 @@ fn layout_proof_tree(tree: &ProofBranch, options: &LayoutOptions) -> LayoutBox {
 
 fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTreeLayout {
     let metrics = options.metrics();
-    let rule_thickness = metrics.default_rule_thickness;
-    let premise_gap = 0.6;
-    let label_gap = 0.25;
-    let vertical_gap = 0.18;
+    let rule_thickness = (metrics.default_rule_thickness * 2.0).max(0.08);
+    // Bussproofs spacing constants (in em).
+    // Tune premise spacing to better match MathJax/bussproofs horizontal spread.
+    //   premise_gap  → horizontal gap between sibling premises
+    //   label_gap    → gap between inference rule and its left/right label
+    //   vertical_gap → vertical gap between rule and surrounding content
+    let premise_gap = 2.0;
+    let label_gap = 0.08;
+    let vertical_gap = 0.32;
 
-    let conclusion = layout_expression(&tree.conclusion, options, true);
+    let conclusion = layout_proof_cell_content(&tree.conclusion, options);
+    let conclusion_width = conclusion.width;
 
     if tree.premises.is_empty() {
         let width = conclusion.width;
@@ -4709,6 +4747,8 @@ fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTree
             width,
             height,
             depth,
+            root_width: width,
+            root_center_x: width / 2.0,
             children: vec![PlacedBox {
                 box_: conclusion,
                 x: 0.0,
@@ -4736,19 +4776,141 @@ fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTree
         .fold(0.0_f64, f64::max);
     let premise_total = premise_height + premise_depth;
 
-    let rule_width = premise_width.max(conclusion.width).max(0.5);
-    let core_width = premise_width.max(rule_width).max(conclusion.width);
+    let mut premise_root_left = f64::INFINITY;
+    let mut premise_root_right = f64::NEG_INFINITY;
+    let mut cursor = 0.0_f64;
+    for premise in &premise_layouts {
+        let root_left = cursor + premise.root_center_x - premise.root_width / 2.0;
+        let root_right = cursor + premise.root_center_x + premise.root_width / 2.0;
+        premise_root_left = premise_root_left.min(root_left);
+        premise_root_right = premise_root_right.max(root_right);
+        cursor += premise.width + premise_gap;
+    }
+    let rule_padding = if tree.premises.len() > 1 { 0.65 } else { 0.0 };
+    let premise_rule_width = premise_root_right - premise_root_left + rule_padding;
+    let premise_root_center = (premise_root_left + premise_root_right) / 2.0;
+    let rule_width = premise_rule_width.max(conclusion_width).max(1.12);
+    let core_width = premise_width.max(rule_width).max(conclusion_width);
     let center_x = core_width / 2.0;
     let premise_start_x = center_x - premise_width / 2.0;
-    let rule_x = center_x - rule_width / 2.0;
+    let root_center_x = premise_start_x + premise_root_center;
+    let rule_x = root_center_x - rule_width / 2.0;
     let rule_y = premise_total + vertical_gap + rule_thickness / 2.0;
-    let conclusion_x = center_x - conclusion.width / 2.0;
+    let conclusion_x = root_center_x - conclusion_width / 2.0;
     let conclusion_baseline_y = rule_y + rule_thickness / 2.0 + vertical_gap + conclusion.height;
 
     let mut children = Vec::new();
     let mut rules = Vec::new();
     let mut min_x = 0.0_f64;
     let mut max_x = core_width;
+
+    if tree.root_at_top {
+        let conclusion_baseline_y = conclusion.height;
+        let rule_y =
+            conclusion.height + conclusion.depth + vertical_gap + rule_thickness / 2.0;
+        let premise_top_y = rule_y + rule_thickness / 2.0 + vertical_gap;
+        let premise_baseline_y = premise_top_y + premise_height;
+
+        min_x = min_x.min(conclusion_x);
+        max_x = max_x.max(conclusion_x + conclusion_width);
+        children.push(PlacedBox {
+            box_: conclusion,
+            x: conclusion_x,
+            baseline_y: conclusion_baseline_y,
+        });
+
+        let mut cursor = premise_start_x;
+        for premise in premise_layouts {
+            let child_top_y = premise_baseline_y - premise.height;
+            for child in premise.children {
+                let x = cursor + child.x;
+                let y = child_top_y + child.baseline_y;
+                min_x = min_x.min(x);
+                max_x = max_x.max(x + child.box_.width);
+                children.push(PlacedBox {
+                    box_: child.box_,
+                    x,
+                    baseline_y: y,
+                });
+            }
+            for rule in premise.rules {
+                min_x = min_x.min(cursor + rule.x);
+                max_x = max_x.max(cursor + rule.x + rule.width);
+                rules.push(ProofRule {
+                    x: cursor + rule.x,
+                    y: child_top_y + rule.y,
+                    width: rule.width,
+                    thickness: rule.thickness,
+                    dashed: rule.dashed,
+                });
+            }
+            cursor += premise.width + premise_gap;
+        }
+
+        if !matches!(tree.line_style, ProofLineStyle::None) {
+            rules.push(ProofRule {
+                x: rule_x,
+                y: rule_y,
+                width: rule_width,
+                thickness: rule_thickness,
+                dashed: matches!(tree.line_style, ProofLineStyle::Dashed),
+            });
+        }
+
+        if let Some(label) = tree.left_label.as_ref() {
+            let label_opts = options.with_style(options.style.text());
+            let label_box = layout_proof_roman_content(label, &label_opts);
+            let x = rule_x - label_gap - label_box.width;
+            let baseline_y = rule_y + (label_box.height - label_box.depth) / 2.0;
+            min_x = min_x.min(x);
+            max_x = max_x.max(x + label_box.width);
+            children.push(PlacedBox {
+                box_: label_box,
+                x,
+                baseline_y,
+            });
+        }
+
+        if let Some(label) = tree.right_label.as_ref() {
+            let label_opts = options.with_style(options.style.text());
+            let label_box = layout_proof_roman_content(label, &label_opts);
+            let x = rule_x + rule_width + label_gap;
+            let baseline_y = rule_y + (label_box.height - label_box.depth) / 2.0;
+            min_x = min_x.min(x);
+            max_x = max_x.max(x + label_box.width);
+            children.push(PlacedBox {
+                box_: label_box,
+                x,
+                baseline_y,
+            });
+        }
+
+        let mut root_center_x = root_center_x;
+        if min_x < 0.0 {
+            let shift_x = -min_x;
+            for child in &mut children {
+                child.x += shift_x;
+            }
+            for rule in &mut rules {
+                rule.x += shift_x;
+            }
+            root_center_x += shift_x;
+        }
+
+        return ProofTreeLayout {
+            width: max_x - min_x,
+            height: conclusion_baseline_y,
+            depth: children
+                .iter()
+                .map(|c| c.baseline_y + c.box_.depth - conclusion_baseline_y)
+                .fold(0.0_f64, f64::max)
+                .max(0.0),
+            root_width: conclusion_width,
+            root_center_x,
+            children,
+            rules,
+        };
+    }
 
     let mut cursor = premise_start_x;
     for premise in premise_layouts {
@@ -4780,7 +4942,7 @@ fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTree
     }
 
     min_x = min_x.min(conclusion_x);
-    max_x = max_x.max(conclusion_x + conclusion.width);
+    max_x = max_x.max(conclusion_x + conclusion_width);
     children.push(PlacedBox {
         box_: conclusion,
         x: conclusion_x,
@@ -4798,7 +4960,8 @@ fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTree
     }
 
     if let Some(label) = tree.left_label.as_ref() {
-        let label_box = layout_expression(label, options, true);
+        let label_opts = options.with_style(options.style.text());
+        let label_box = layout_proof_roman_content(label, &label_opts);
         let x = rule_x - label_gap - label_box.width;
         let baseline_y = rule_y + (label_box.height - label_box.depth) / 2.0;
         min_x = min_x.min(x);
@@ -4811,7 +4974,8 @@ fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTree
     }
 
     if let Some(label) = tree.right_label.as_ref() {
-        let label_box = layout_expression(label, options, true);
+        let label_opts = options.with_style(options.style.text());
+        let label_box = layout_proof_roman_content(label, &label_opts);
         let x = rule_x + rule_width + label_gap;
         let baseline_y = rule_y + (label_box.height - label_box.depth) / 2.0;
         min_x = min_x.min(x);
@@ -4823,6 +4987,7 @@ fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTree
         });
     }
 
+    let mut root_center_x = root_center_x;
     if min_x < 0.0 {
         let shift = -min_x;
         for child in &mut children {
@@ -4831,6 +4996,7 @@ fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTree
         for rule in &mut rules {
             rule.x += shift;
         }
+        root_center_x += shift;
     }
 
     ProofTreeLayout {
@@ -4840,6 +5006,8 @@ fn layout_proof_branch(tree: &ProofBranch, options: &LayoutOptions) -> ProofTree
             .iter()
             .map(|c| c.baseline_y + c.box_.depth - conclusion_baseline_y)
             .fold(0.0_f64, f64::max),
+        root_width: conclusion_width,
+        root_center_x,
         children,
         rules,
     }

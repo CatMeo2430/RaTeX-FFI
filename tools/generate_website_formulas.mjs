@@ -15,6 +15,7 @@ const ROOT = path.resolve(__dirname, "..");
 
 const MATH_FILE = path.join(ROOT, "tests/golden/test_cases.txt");
 const CE_FILE = path.join(ROOT, "tests/golden/test_case_ce.txt");
+const PROOFTREE_FILE = path.join(ROOT, "tests/golden/test_cases_prooftree.txt");
 const OUT_DIR = path.join(ROOT, "website", "public", "data");
 
 /** Extra physics-flavored formulas (not in mhchem golden); shown after \\pu examples. */
@@ -198,6 +199,7 @@ function buildMathSections(mathLines) {
 
 function main() {
   const math = readLinesNonEmpty(MATH_FILE);
+  const prooftree = readLinesNonEmpty(PROOFTREE_FILE);
 
   const ceLines = readLinesNonEmpty(CE_FILE);
   const chemistry = [];
@@ -232,9 +234,14 @@ function main() {
     JSON.stringify({ count: physics.length, formulas: physics }, null, 0),
     "utf8"
   );
+  fs.writeFileSync(
+    path.join(OUT_DIR, "prooftree.json"),
+    JSON.stringify({ count: prooftree.length, formulas: prooftree }, null, 0),
+    "utf8"
+  );
 
   console.log(
-    `Wrote website/public/data: math=${math.length} (${mathSections.length} sections), chemistry=${chemistry.length}, physics=${physics.length}`
+    `Wrote website/public/data: math=${math.length} (${mathSections.length} sections), chemistry=${chemistry.length}, physics=${physics.length}, prooftree=${prooftree.length}`
   );
 }
 

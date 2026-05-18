@@ -110,6 +110,7 @@ const platformLinks = [
           <span class="font-semibold text-on-surface">{t.home.whenToUseChem}</span>
           — <code class="bg-surface-container px-1 font-mono text-sm">\ce</code>
           {" "}/<code class="bg-surface-container px-1 font-mono text-sm">\pu</code>
+          {" "}/<code class="bg-surface-container px-1 font-mono text-sm">prooftree</code>
           {" "}{t.home.whenToUseChemDescSuffix}
         </li>
       </ul>
@@ -154,7 +155,7 @@ const platformLinks = [
         </div>
         <div class="mt-12 flex flex-wrap gap-2">
           <span class="text-xs font-mono bg-surface-container px-2 py-1">MHCHEM</span>
-          <span class="text-xs font-mono bg-surface-container px-2 py-1">LATEX_MATH</span>
+          <span class="text-xs font-mono bg-surface-container px-2 py-1">PROOFTREE</span>
         </div>
       </div>
     </section>
@@ -166,7 +167,8 @@ const platformLinks = [
         {t.home.galleriesDescPrefix}
         {" "}<a class="text-primary underline font-medium" href={pageHref("math.html", lang, base)}>{t.nav.math}</a>,
         {" "}<a class="text-primary underline font-medium" href={pageHref("chemistry.html", lang, base)}>{t.nav.chemistry}</a>,
-        {" "}<a class="text-primary underline font-medium" href={pageHref("physics.html", lang, base)}>{t.nav.physics}</a>.
+        {" "}<a class="text-primary underline font-medium" href={pageHref("physics.html", lang, base)}>{t.nav.physics}</a>,
+        {" "}<a class="text-primary underline font-medium" href={pageHref("proof-trees.html", lang, base)}>{t.nav.proofs}</a>.
         {" "}{t.home.galleriesDemoPrefix}
         {" "}<a class="text-primary underline font-medium" href={pageHref("demo.html", lang, base)}>{t.home.galleriesDemoLink}</a>{t.home.galleriesDemoMid}
         {" "}<a class="text-primary underline font-medium" href={`${pageHref("demo.html", lang, base)}#support-table`}>{t.home.galleriesSupportLink}</a>
@@ -213,7 +215,7 @@ const platformLinks = [
             </tr>
             <tr class="border-b border-outline/30 hover:bg-surface-container/50">
               <td scope="row" class="py-5 px-3 font-semibold">{t.home.comparisonJsBundle}</td>
-              <td class="py-5 px-3 text-primary font-mono text-xs md:text-sm">0 kB JS (core is WASM)</td>
+              <td class="py-5 px-3 text-primary font-mono text-xs md:text-sm">Thin JS glue + WASM core</td>
               <td class="py-5 px-3 opacity-70">~280 kB</td>
               <td class="py-5 px-3 opacity-70">~500 kB</td>
             </tr>

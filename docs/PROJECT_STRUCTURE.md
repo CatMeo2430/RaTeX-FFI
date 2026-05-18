@@ -50,7 +50,7 @@ RaTeX/
 │   ├── extract_mhchem_manual_examples.mjs  # gh-pages manual → tests/golden/test_case_ce.txt
 │   ├── convert_metrics.py        # KaTeX fontMetricsData.js → Rust
 │   ├── convert_symbols.py        # KaTeX symbols.js → Rust
-│   ├── golden_compare/           # Golden PNG comparison (compare_golden.py)
+│   ├── golden_compare/           # Golden PNG comparison + reference generators (KaTeX/mhchem, MathJax prooftree)
 │   ├── layout_compare/            # Layout box vs KaTeX (katex_layout.mjs + compare_layouts.py)
 │   ├── lexer_compare/             # Token output vs KaTeX lexer
 │   └── parser_compare/            # Parser comparison
@@ -59,15 +59,20 @@ RaTeX/
 │   └── golden/                   # Golden test assets
 │       ├── fixtures/              # KaTeX reference PNGs (per test case)
 │       ├── fixtures_ce/           # KaTeX+mhchem reference PNGs (optional; for test_case_ce)
+│       ├── fixtures_prooftree/    # MathJax+bussproofs reference PNGs (optional; for test_cases_prooftree)
 │       ├── output/                # RaTeX-rendered PNGs (from ratex-render)
 │       ├── output_ce/             # RaTeX mhchem renders (from update_golden_output.sh)
+│       ├── output_prooftree/      # RaTeX bussproofs/prooftree PNG renders
+│       ├── output_svg_prooftree/  # RaTeX bussproofs/prooftree SVG renders
 │       ├── test_cases.txt         # One LaTeX formula per line
 │       ├── test_case_ce.txt       # mhchem \\ce / \\pu examples (fixtures_ce/ refs); parser uses Rust mhchem
+│       ├── test_cases_prooftree.txt # bussproofs \\begin{prooftree} examples
 │
 ├── scripts/
 │   ├── set-version.sh             # Sync version to all platform manifests
 │   ├── sync-katex-ttf-to-font-crate.sh  # Copy KaTeX *.ttf → crates/ratex-katex-fonts/fonts/
 │   ├── update_golden_output.sh    # Renders all test_cases.txt → output/
+│   ├── update_golden_prooftree.sh # Renders test_cases_prooftree.txt → output_prooftree/ + output_svg_prooftree/
 │   ├── test-unicode-font.sh       # Batch PNG/SVG/PDF render of test-formulas.txt across system / env fonts (CJK regression)
 │   ├── test-formulas.txt          # Sample lines for test-unicode-font.sh
 │   └── fonts/                     # Optional bundled fonts for tests (e.g. NotoSansCJKsc)
@@ -128,7 +133,7 @@ serde_json = "1.0"
 | **ratex-types** | `DisplayList`, `DisplayItem` (GlyphPath, Line, Rect, Path), `Color`, `PathCommand`, `MathStyle` |
 | **ratex-font** | KaTeX font metrics, symbol tables; `data/metrics_data.rs`, `data/symbols_data.rs` (generated) |
 | **ratex-lexer** | LaTeX string → token stream |
-| **ratex-parser** | Token stream → ParseNode AST (macro expansion, functions); auto-numbering for `equation` / `align` / `gather` / `alignat` (non-starred) and trailing-row `\tag` / `\nonumber` / `\notag` |
+| **ratex-parser** | Token stream → ParseNode AST (macro expansion, functions); mhchem `\ce` / `\pu`; bussproofs `prooftree`; auto-numbering for `equation` / `align` / `gather` / `alignat` (non-starred) and trailing-row `\tag` / `\nonumber` / `\notag` |
 | **ratex-layout** | AST → LayoutBox tree → `to_display_list` → DisplayList |
 | **ratex-katex-fonts** | Bundled KaTeX `.ttf` files + embed API; optional dep for `ratex-svg` / `ratex-render` / `ratex-pdf` `embed-fonts` |
 | **ratex-font-loader** | Shared lazy font source/cache planner for PNG/SVG/PDF; cache entries are keyed by embedded/directory/system source |

@@ -46,6 +46,27 @@ cargo test -p ratex-render golden_mhchem_pass_rate -- --nocapture
 
 RaTeX renders for inspection: `./scripts/update_golden_output.sh` (writes `tests/golden/output_ce/`). Compare with KaTeX refs using `python3 tools/golden_compare/compare_golden.py --ce` (same ink metric as the main golden script).
 
+**bussproofs / `prooftree` golden**: test cases live in `tests/golden/test_cases_prooftree.txt`. KaTeX does not support `prooftree`, so reference PNGs are generated with MathJax and its bussproofs extension:
+
+```bash
+cd tools/golden_compare && npm install
+node generate_reference_prooftree.mjs ../../tests/golden/test_cases_prooftree.txt ../../tests/golden/fixtures_prooftree
+```
+
+RaTeX renders for inspection:
+
+```bash
+./scripts/update_golden_prooftree.sh
+```
+
+This writes PNG output to `tests/golden/output_prooftree/` and standalone SVG output to `tests/golden/output_svg_prooftree/`. Compare against the MathJax references with:
+
+```bash
+python3 tools/golden_compare/compare_golden.py \
+  --fixtures tests/golden/fixtures_prooftree \
+  --output tests/golden/output_prooftree
+```
+
 ## Regenerating font data (advanced)
 
 KaTeX-derived metrics/symbols in `crates/ratex-font/src/data/` are generated from scripts in `tools/` (`convert_metrics.py`, `convert_symbols.py`). Only rerun when intentionally updating KaTeX baseline data.

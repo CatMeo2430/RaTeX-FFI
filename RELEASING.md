@@ -57,6 +57,7 @@ Android / iOS / JVM 的 Maven 或 Xcode 产物版本在各自 **release workflow
 - **Release Android** (`release-android.yml`) — 构建 AAR 并发布到 Maven Central
 - **Release iOS** (`release-ios.yml`) — 构建 XCFramework、创建 GitHub Release
 - **Release JVM** (`release-jvm.yml`) — 构建多平台 native + JAR，发布到 Maven Central，并创建 GitHub Release（附带 JAR）
+- **Release CLI** (`release-cli.yml`) — 构建多平台 CLI 压缩包，并上传到 GitHub Release
 - **Release React Native** (`release-react-native.yml`) — 发布 `ratex-react-native` 到 npm（含预构建 iOS/Android 原生库）
 
 各 workflow 会校验对应 manifest 的版本是否与 tag 一致，不一致则失败。

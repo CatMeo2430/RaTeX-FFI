@@ -7,6 +7,7 @@ export const zh: TranslationDict = {
     math: "数学",
     chemistry: "化学",
     physics: "物理",
+    proofs: "证明树",
     getStarted: "快速上手",
     langEn: "EN",
     langZh: "中文",
@@ -52,20 +53,20 @@ export const zh: TranslationDict = {
       "在 WebAssembly 中运行核心并用 Canvas 绘制；在",
     whenToUseWasmLink: "实时演示",
     whenToUseWasmDescSuffix: "中与 KaTeX 对比输出。",
-    whenToUseChem: "化学与单位",
+    whenToUseChem: "化学、单位与证明树",
     whenToUseChemDescSuffix:
-      "在 mhchem 兼容路径上与普通数学并用（见下方图库）。",
+      "以及 bussproofs 风格证明树，都可与普通数学并用（见下方图库）。",
     rustCoreHeading: "Rust 核心",
     rustCoreDesc:
       "单一排版引擎，热路径无 GC：为移动 UI、服务器和 CI 光栅测试提供可预期的计时。",
     shipEverywhereHeading: "随处部署",
     shipEverywhereDesc:
       "为 Swift、Kotlin、Dart 等提供 C ABI，为 Web 提供 WASM；tiny-skia 或自定义光栅化器——显示列表完全一致。",
-    mhchemHeading: "mhchem 化学支持",
+    mhchemHeading: "领域记法支持",
     mhchemDescPrefix: "内置",
     mhchemDescMid: "和",
     mhchemDescSuffix:
-      "，通过 mhchem 兼容路径——反应箭头和物理单位与普通数学在同一流水线中。",
+      "用于 mhchem 风格化学与单位；bussproofs 证明树也在同一普通数学流水线中渲染。",
     galleriesEyebrow: "在浏览器中体验",
     galleriesHeading: "基准测试套件图库",
     galleriesDescPrefix:
@@ -178,7 +179,8 @@ export const zh: TranslationDict = {
     suggestedOrderLiveLink: "实时对比",
     suggestedOrderDescMid: "开始测试单个公式，然后打开",
     suggestedOrderTableLink: "支持表",
-    suggestedOrderDescSuffix: "扫描完整主 golden 列表（`tests/golden/test_cases.txt`，行数随仓库变化），最后在需要分类浏览时使用图库。",
+    suggestedOrderDescSuffix:
+      "扫描完整主 golden 列表（`tests/golden/test_cases.txt`，行数随仓库变化），最后在需要分类浏览时使用图库。证明树使用单独的 `tests/golden/test_cases_prooftree.txt` 列表。",
     howItLoadsLabel: "加载方式：",
     howItLoadsDesc:
       "KaTeX 0.16.45 CSS/JS 来自 jsDelivr。RaTeX 使用本站的 platforms/web/（WASM + 字体）。在 GitHub Pages 上会随部署一起发布；本地请构建 WASM 并使用开发服务器——见",
@@ -196,7 +198,7 @@ export const zh: TranslationDict = {
     galleriesEyebrow: "相同 WASM · 不同界面",
     galleriesHeading: "基准测试套件图库",
     galleriesDesc:
-      "与站点导航栏相同的目标——带有源码和 Canvas 的长列表，懒加载，适合抽查多个公式。",
+      "与站点导航栏相同的目标——带有源码和 Canvas 的长列表，懒加载，适合抽查数学、化学、单位与证明树公式。",
     galleriesOpen: "打开",
     footerText: "在应用中集成 RaTeX：",
     footerLink: "按平台快速上手",
@@ -204,11 +206,13 @@ export const zh: TranslationDict = {
       math: "数学",
       chemistry: "化学",
       physics: "物理",
+      proofs: "证明树",
     },
     galleryHints: {
       math: "KaTeX 风格分节 · 900+ 行",
       chemistry: "mhchem \\ce",
       physics: "\\pu 及精选",
+      proofs: "bussproofs prooftree",
     },
   },
   demoLive: {
@@ -227,7 +231,7 @@ export const zh: TranslationDict = {
   supportTable: {
     eyebrow: "基准测试",
     heading: "公式支持表",
-    desc: "RaTeX（Rust + WASM）与 KaTeX 0.16.45 并排对比主 golden 套件中的每一行（公式列表以页面内嵌数据为准，主要源自 `tests/golden/test_cases.txt`；行数随仓库变化；另含 mhchem \\ce / \\pu 等条目）。离线格使用预计算的墨水 IoU 与 KaTeX 参考 PNG 对比；RaTeX 列由您浏览器中加载的 WASM 实时计算。",
+    desc: "RaTeX（Rust + WASM）与 KaTeX 0.16.45 并排对比主 golden 套件中的每一行（公式列表以页面内嵌数据为准，主要源自 `tests/golden/test_cases.txt`；行数随仓库变化；另含 mhchem \\ce / \\pu 等条目）。离线格使用预计算的墨水 IoU 与 KaTeX 参考 PNG 对比；RaTeX 列由您浏览器中加载的 WASM 实时计算。bussproofs `prooftree` 因 KaTeX 没有对应渲染器，单独在证明树图库中跟踪。",
     dataSourceLabel: "数据来源",
     dataSourceDescPrefix:
       "批量离线分数和聚合计数在 CI 运行中重新生成，可能比最新的",
@@ -294,5 +298,16 @@ export const zh: TranslationDict = {
     desc2link: "化学",
     desc2suffix: "图库。",
     ariaLabel: "物理公式网格",
+  },
+  proofGallery: {
+    eyebrow: "图库 · bussproofs",
+    title: "证明树",
+    desc1prefix: "来自",
+    desc1suffix:
+      "，覆盖 RaTeX 在 golden 渲染测试中使用的 bussproofs 风格 `prooftree` 子集。",
+    desc2prefix:
+      "由于 KaTeX 不实现",
+    desc2suffix: "，参考 PNG 使用 MathJax 的 bussproofs 扩展生成。",
+    ariaLabel: "证明树公式网格",
   },
 };

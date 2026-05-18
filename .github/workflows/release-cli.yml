@@ -89,7 +89,7 @@ jobs:
           path: ratex-cli-${{ github.ref_name }}-${{ matrix.target }}.*
 
   release:
-    name: Upload CLI assets to existing Release
+    name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -98,28 +98,6 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Verify Release exists for tag
-        run: |
-          set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::error::No GitHub Release for tag $TAG. Create the release for this tag first, then re-run this job."
-            exit 1
-          fi
-          echo "Release $TAG exists."
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload assets to Release
-        run: |
-          set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          shopt -s nullglob
-          files=(artifacts/*)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "::error::No files under artifacts/ to upload."
-            exit 1
-          fi
-          gh release upload "$TAG" "${files[@]}" --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*

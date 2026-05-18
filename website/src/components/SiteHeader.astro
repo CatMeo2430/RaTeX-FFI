@@ -3,7 +3,7 @@ import type { Locale } from "../i18n/types";
 import { useTranslations, pageHref } from "../i18n/utils";
 
 interface Props {
-  active?: "home" | "math" | "chemistry" | "physics" | "get-started" | "demo";
+  active?: "home" | "math" | "chemistry" | "physics" | "proofs" | "get-started" | "demo";
   lang?: Locale;
 }
 
@@ -43,6 +43,7 @@ function langBtnClass(isActive: boolean) {
       <a class={navClass(active === "math")} href={pageHref("math.html", lang, base)}>{t.nav.math}</a>
       <a class={navClass(active === "chemistry")} href={pageHref("chemistry.html", lang, base)}>{t.nav.chemistry}</a>
       <a class={navClass(active === "physics")} href={pageHref("physics.html", lang, base)}>{t.nav.physics}</a>
+      <a class={navClass(active === "proofs")} href={pageHref("proof-trees.html", lang, base)}>{t.nav.proofs}</a>
     </div>
     <div class="flex items-center gap-3">
       <!-- Language switcher: desktop only (mobile uses secondary row) -->
@@ -81,6 +82,7 @@ function langBtnClass(isActive: boolean) {
       <a href={pageHref("math.html", lang, base)} class={navClass(active === "math")}>{t.nav.math}</a>
       <a href={pageHref("chemistry.html", lang, base)} class={navClass(active === "chemistry")}>{t.nav.chemistry}</a>
       <a href={pageHref("physics.html", lang, base)} class={navClass(active === "physics")}>{t.nav.physics}</a>
+      <a href={pageHref("proof-trees.html", lang, base)} class={navClass(active === "proofs")}>{t.nav.proofs}</a>
       <a href={pageHref("demo.html", lang, base)} class={navClass(active === "demo")}>{t.nav.demo}</a>
       <a href={active === "home" ? `#features` : pageHref("", lang, base) + "#features"} class={navClass(active === "home")}>{t.nav.features}</a>
       <span class="text-zinc-300" aria-hidden="true">|</span>

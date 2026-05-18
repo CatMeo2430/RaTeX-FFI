@@ -5,6 +5,7 @@ export const en = {
     math: "Math",
     chemistry: "Chemistry",
     physics: "Physics",
+    proofs: "Proof trees",
     getStarted: "Get started",
     langEn: "EN",
     langZh: "中文",
@@ -50,20 +51,20 @@ export const en = {
       "Run the core in WebAssembly and draw with Canvas; compare output with KaTeX in the",
     whenToUseWasmLink: "live demo",
     whenToUseWasmDescSuffix: ".",
-    whenToUseChem: "Chemistry & units",
+    whenToUseChem: "Chemistry, units & proofs",
     whenToUseChemDescSuffix:
-      "on the mhchem-style path next to ordinary math (see galleries below).",
+      "and bussproofs-style proof trees next to ordinary math (see galleries below).",
     rustCoreHeading: "Rust core",
     rustCoreDesc:
       "One layout engine, no GC in the hot path: predictable timing for mobile UIs, servers, and CI raster tests.",
     shipEverywhereHeading: "Ship everywhere",
     shipEverywhereDesc:
       "C ABI for Swift, Kotlin, Dart, … WASM for the web; tiny-skia or your own rasterizer—identical display lists.",
-    mhchemHeading: "mhchem-style chemistry",
+    mhchemHeading: "Domain notation",
     mhchemDescPrefix: "Built-in",
     mhchemDescMid: "and",
     mhchemDescSuffix:
-      "on the mhchem-compatible path—reaction arrows and physical units in the same pipeline as ordinary math.",
+      "for mhchem-style chemistry and units; bussproofs proof trees render in the same pipeline as ordinary math.",
     galleriesEyebrow: "Try it in the browser",
     galleriesHeading: "Golden-suite galleries",
     galleriesDescPrefix:
@@ -179,7 +180,7 @@ export const en = {
     suggestedOrderDescMid: "for one formula, open the",
     suggestedOrderTableLink: "support table",
     suggestedOrderDescSuffix:
-      "to scan the full main golden list (`tests/golden/test_cases.txt`; line count follows the repo), then use galleries when you want categorized scrolling.",
+      "to scan the full main golden list (`tests/golden/test_cases.txt`; line count follows the repo), then use galleries when you want categorized scrolling. Proof trees use their own `tests/golden/test_cases_prooftree.txt` list.",
     howItLoadsLabel: "How it loads:",
     howItLoadsDesc:
       "KaTeX 0.16.45 CSS/JS from jsDelivr. RaTeX uses this site\u2019s platforms/web/ (WASM + fonts). On GitHub Pages that ships with the deployment; locally, build WASM and use the dev server\u2014see",
@@ -197,7 +198,7 @@ export const en = {
     galleriesEyebrow: "Same WASM \u00b7 different UI",
     galleriesHeading: "Golden-suite galleries",
     galleriesDesc:
-      "Same destinations as the site header\u2014long, lazy-loaded lists with source above and canvas below for spot-checking many formulas.",
+      "Same destinations as the site header\u2014long, lazy-loaded lists with source above and canvas below for spot-checking math, chemistry, units, and proof trees.",
     galleriesOpen: "Open",
     footerText: "Integrate RaTeX in apps:",
     footerLink: "Get started by platform",
@@ -205,11 +206,13 @@ export const en = {
       math: "Math",
       chemistry: "Chemistry",
       physics: "Physics",
+      proofs: "Proof trees",
     },
     galleryHints: {
       math: "KaTeX-style sections \u00b7 900+ lines",
       chemistry: "mhchem \\ce",
       physics: "\\pu and curated",
+      proofs: "bussproofs prooftree",
     },
   },
   demoLive: {
@@ -228,7 +231,7 @@ export const en = {
   supportTable: {
     eyebrow: "Benchmarks",
     heading: "Formula support table",
-    desc: "RaTeX (Rust + WASM) vs KaTeX 0.16.45, row-by-row for the main golden suite (embedded page data; sourced primarily from `tests/golden/test_cases.txt` and related lists—line count follows the repo; includes mhchem \\ce / \\pu rows where present). Offline cells use pre-computed ink IoU vs KaTeX reference PNGs; the RaTeX column is computed live in your browser from the loaded WASM.",
+    desc: "RaTeX (Rust + WASM) vs KaTeX 0.16.45, row-by-row for the main golden suite (embedded page data; sourced primarily from `tests/golden/test_cases.txt` and related lists—line count follows the repo; includes mhchem \\ce / \\pu rows where present). Offline cells use pre-computed ink IoU vs KaTeX reference PNGs; the RaTeX column is computed live in your browser from the loaded WASM. bussproofs `prooftree` is tracked separately in the Proof trees gallery because KaTeX has no `prooftree` renderer.",
     dataSourceLabel: "Data source",
     dataSourceDescPrefix:
       "Batch offline scores and aggregate counts are regenerated in CI runs and may lag the latest",
@@ -297,5 +300,16 @@ export const en = {
     desc2link: "Chemistry",
     desc2suffix: "gallery.",
     ariaLabel: "Physics formula grid",
+  },
+  proofGallery: {
+    eyebrow: "Gallery \u00b7 bussproofs",
+    title: "Proof trees",
+    desc1prefix: "Lines from",
+    desc1suffix:
+      "cover the RaTeX bussproofs-style `prooftree` subset used in golden rendering tests.",
+    desc2prefix:
+      "Reference PNGs are generated with MathJax's bussproofs extension because KaTeX does not implement",
+    desc2suffix: ".",
+    ariaLabel: "Proof-tree formula grid",
   },
 };

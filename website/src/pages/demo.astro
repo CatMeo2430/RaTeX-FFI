@@ -35,12 +35,13 @@ const galleryLinks = [
   { label: t.demo.galleryLabels.math, href: pageHref("math.html", lang, base), hint: t.demo.galleryHints.math },
   { label: t.demo.galleryLabels.chemistry, href: pageHref("chemistry.html", lang, base), hint: t.demo.galleryHints.chemistry },
   { label: t.demo.galleryLabels.physics, href: pageHref("physics.html", lang, base), hint: t.demo.galleryHints.physics },
+  { label: t.demo.galleryLabels.proofs, href: pageHref("proof-trees.html", lang, base), hint: t.demo.galleryHints.proofs },
 ] as const;
 ---
 
 <BaseLayout
   title="RaTeX — Demos & benchmarks"
-  description="RaTeX WASM vs KaTeX 0.16.45: live comparison, 916-formula support table, and golden galleries (Math, Chemistry, Physics)."
+  description="RaTeX WASM vs KaTeX 0.16.45: live comparison, support table, and golden galleries (Math, Chemistry, Physics, Proof trees)."
   active="demo"
   lang={lang}
   copyright={t.footer.copyright}
@@ -124,7 +125,7 @@ const galleryLinks = [
             {t.demo.galleriesDesc}
           </p>
         </div>
-        <ul class="grid grid-cols-1 sm:grid-cols-3 gap-4" role="list">
+        <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" role="list">
           {
             galleryLinks.map((g) => (
               <li>

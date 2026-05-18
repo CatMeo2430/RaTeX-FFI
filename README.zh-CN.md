@@ -53,6 +53,21 @@ RaTeX 是同一个 KaTeX 兼容的数学引擎，但编译到一个可移植的 
 
 **物理单位** — `\pu` 支持符合 IUPAC 规范的数值+单位表达式。
 
+**证明树** — 支持 bussproofs 风格的 `prooftree`，可渲染推理规则与相继式演算：
+
+```latex
+\begin{prooftree}
+\AxiomC{A \fCenter B}
+\LeftLabel{cut}
+\RightLabel{\alpha}
+\UnaryInfC{C \fCenter D}
+\end{prooftree}
+```
+
+已支持命令包括 `\AxiomC` / `\AXC`，一元到五元推理命令（`\UnaryInfC`、`\BinaryInfC` 等，以及 `\UIC`、`\BIC`、`\TIC` 等缩写），`\LeftLabel` / `\RightLabel`（`\LL` / `\RL`），`\solidLine` / `\singleLine`、`\dashedLine`、`\noLine` 及对应的 `\always*Line` 默认值，`\rootAtTop` / `\rootAtBottom`、`\alwaysRootAtTop` / `\alwaysRootAtBottom`，以及 `\fCenter`。
+
+bussproofs 中尚未实现：`\InsertBetweenHyps`、`\ScoreTree`、`\Cell`、`\noCell`。由于 KaTeX 不实现 `prooftree`，证明树 golden 参考图使用 MathJax 的 bussproofs 扩展生成。
+
 ### 与 KaTeX 的差异（命令 / DOM）
 
 下列为相对 **KaTeX 默认能力**（含 `trust` 等设置）在**命令级**上仍不一致或缺失的条目；**常见数学与 mhchem 写法**已与 KaTeX 对齐。个别公式在 [支持表](https://erweixin.github.io/RaTeX/demo/support-table.html) 或 golden 中与参考图 **墨量分数**略有差异，属于版式/光栅化与参考 PNG 的差异，**不**等同于下表中的「缺命令」。
@@ -117,7 +132,7 @@ flowchart LR
     A["LaTeX 字符串\n(数学 · \\ce · \\pu)"]
     subgraph core["Rust 核心"]
         B[ratex-lexer]
-        C[ratex-parser\nmhchem · 编号 · \\ce / \\pu]
+        C[ratex-parser\nmhchem · 编号 · bussproofs]
         D[ratex-layout]
         E[DisplayList]
     end
@@ -143,7 +158,7 @@ flowchart LR
 | `ratex-types` | 共享类型：`DisplayItem`、`DisplayList`、`Color`、`MathStyle` |
 | `ratex-font` | 兼容 KaTeX 的字体度量与符号表 |
 | `ratex-lexer` | LaTeX → token 流 |
-| `ratex-parser` | token 流 → ParseNode AST；mhchem `\ce` / `\pu`；`equation` / `align` / `gather` / `alignat` 等环境的自动编号与行末 `\tag` / `\nonumber` / `\notag` |
+| `ratex-parser` | token 流 → ParseNode AST；mhchem `\ce` / `\pu`；bussproofs `prooftree`；`equation` / `align` / `gather` / `alignat` 等环境的自动编号与行末 `\tag` / `\nonumber` / `\notag` |
 | `ratex-layout` | AST → LayoutBox 树 → DisplayList |
 | `ratex-ffi` | C ABI：向各原生平台暴露完整流水线 |
 | `ratex-wasm` | WASM：流水线 → DisplayList JSON（浏览器） |
