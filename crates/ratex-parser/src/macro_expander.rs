@@ -261,7 +261,7 @@ impl<'a> MacroExpander<'a> {
             ("\\dotsm", "\\cdots"),
             ("\\dotsi", "\\!\\cdots"),
             ("\\dotsx", "\\ldots\\,"),
-            ("\\dotsc", "\\ldots"),  // comma list: x,\dotsc,y
+            ("\\dotsc", "\\ldots\\,"),  // comma list: x,\dotsc,y
             ("\\dotso", "\\ldots"),  // other
             ("\\DOTSI", "\\relax"),
             ("\\DOTSB", "\\relax"),
@@ -306,12 +306,12 @@ impl<'a> MacroExpander<'a> {
             // KaTeX `src/macros.ts`, so users can paste raw glyphs and
             // get the same expansion as the named macro.
             // Stacked relations (\u2258..\u225F).
-            ("\u{2258}", "\\mathrel{=\\kern{-1em}\\raisebox{0.4em}{$\\scriptsize\\frown$}}"),
+            ("\u{2258}", "\\mathrel{\u{E258}}"),
             ("\u{2259}", "\\stackrel{\\tiny\\wedge}{=}"),
             ("\u{225A}", "\\stackrel{\\tiny\\vee}{=}"),
             ("\u{225B}", "\\stackrel{\\scriptsize\\star}{=}"),
             ("\u{225D}", "\\stackrel{\\tiny\\mathrm{def}}{=}"),
-            ("\u{225E}", "\\stackrel{\\tiny\\mathrm{m}}{=}"),
+            ("\u{225E}", "\\mathrel{\u{E25E}}"),
             ("\u{225F}", "\\stackrel{\\tiny?}{=}"),
             // Misc relations / corners / punctuation.
             ("\u{27C2}", "\\perp"),

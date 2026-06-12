@@ -645,8 +645,17 @@ fn math_glyph_advance_em(m: &ratex_font::CharMetrics, mode: Mode) -> f64 {
 fn layout_symbol(text: &str, mode: Mode, options: &LayoutOptions) -> LayoutBox {
     let ch = resolve_symbol_char(text, mode);
 
+    if text == "\\shortmid" {
+        return make_shortmid_box(options);
+    }
+    if text == "\\textunderscore" {
+        return make_textunderscore_box(options);
+    }
+
     // Synthetic symbols not present in any KaTeX font; built from SVG paths.
     match ch as u32 {
+        0x2258 | 0xE258 => return make_corresponds_symbol(options),
+        0x225E | 0xE25E => return make_measured_by_symbol(options),
         0x22B7 => return layout_imageof_origof(true, options),  // \imageof  •—○
         0x22B6 => return layout_imageof_origof(false, options), // \origof   ○—•
         _ => {}
@@ -1687,8 +1696,13 @@ fn layout_accent(
     }
 
     // Try KaTeX exact SVG paths first (widehat, widetilde, overgroup, etc.)
+    let accent_target_w = if matches!(label, "\\widetilde" | "\\utilde") {
+        base_w * 1.15
+    } else {
+        base_w
+    };
     if let Some((commands, w, h, fill)) =
-        crate::katex_svg::katex_accent_path(label, base_w, accent_ordgroup_len(base))
+        crate::katex_svg::katex_accent_path(label, accent_target_w, accent_ordgroup_len(base))
     {
         // KaTeX paths use SVG coords (y down): height=0, depth=h
         let accent_box = LayoutBox {
@@ -2156,16 +2170,17 @@ fn vert_repeat_piece_height(is_double: bool) -> f64 {
 }
 
 /// Match KaTeX `realHeightTotal` for stack-always `|` / `\Vert` delimiters.
-fn katex_vert_real_height(requested_total: f64, is_double: bool) -> f64 {
+fn katex_vert_real_height(requested_total: f64, is_double: bool, is_sized_delim: bool) -> f64 {
     let piece = vert_repeat_piece_height(is_double);
     let min_h = 2.0 * piece;
     let repeat_count = ((requested_total - min_h) / piece).ceil().max(0.0);
     let mut h = min_h + repeat_count * piece;
-    // Reference PNGs (`tools/golden_compare/generate_reference.mjs`) use 20px CSS + DPR2 screenshots;
-    // our ink bbox for `\Biggm\vert` is slightly shorter than the fixture crop until we match that
-    // pipeline. A small height factor (tuned on golden 0092) aligns `tallDelim` output with fixtures.
-    if (requested_total - 3.0).abs() < 0.01 && !is_double {
-        h *= 1.135;
+    // KaTeX's sized vertical bars are CSS SVG spans with a slightly taller ink
+    // crop in browser screenshots than our native path rasterization. Keep this
+    // adjustment scoped to \big/\Big/\bigg/\Bigg so ordinary stretchy \left bars
+    // still follow content height directly.
+    if is_sized_delim && !is_double {
+        h *= if requested_total < 3.0 { 1.2 } else { 1.135 };
     }
     h
 }
@@ -2268,10 +2283,162 @@ fn map_vert_path_y_to_baseline(
         .collect()
 }
 
+fn make_shortmid_box(options: &LayoutOptions) -> LayoutBox {
+    let total = 0.675_f64;
+    let axis = options.metrics().axis_height;
+    let depth = (total / 2.0 - axis).max(0.0);
+    let height = total - depth;
+    let raw = parse_svg_path_data(&tall_vert_svg_path_data(0, false));
+    let scaled = scale_svg_path_to_em(&raw);
+    let commands = map_vert_path_y_to_baseline(scaled, height, depth, 1170);
+    LayoutBox {
+        width: 0.22222,
+        height,
+        depth,
+        content: BoxContent::SvgPath {
+            commands,
+            fill: true,
+        },
+        color: options.color,
+    }
+}
+
+fn make_textunderscore_box(options: &LayoutOptions) -> LayoutBox {
+    LayoutBox {
+        width: 0.65,
+        height: 0.0,
+        depth: 0.31,
+        content: BoxContent::Rule {
+            thickness: 0.08,
+            raise: -0.31,
+        },
+        color: options.color,
+    }
+}
+
+fn make_corresponds_symbol(options: &LayoutOptions) -> LayoutBox {
+    let width = 1.16;
+    let height = 0.55;
+    let depth = 0.24;
+    let rule_thickness = 0.055;
+    let arc = LayoutBox {
+        width,
+        height: 0.36,
+        depth: 0.0,
+        content: BoxContent::SvgPath {
+            commands: vec![
+                PathCommand::MoveTo { x: 0.02, y: 0.0 },
+                PathCommand::CubicTo {
+                    x1: 0.18,
+                    y1: -0.34,
+                    x2: 0.64,
+                    y2: -0.34,
+                    x: 0.80,
+                    y: 0.0,
+                },
+            ],
+            fill: false,
+        },
+        color: options.color,
+    };
+
+    LayoutBox {
+        width,
+        height,
+        depth,
+        content: BoxContent::ProofTree {
+            children: vec![PlacedBox {
+                box_: arc,
+                x: 0.0,
+                baseline_y: 0.36,
+            }],
+            rules: vec![
+                ProofRule {
+                    x: 0.28,
+                    y: 0.48,
+                    width: 0.86,
+                    thickness: rule_thickness,
+                    dashed: false,
+                },
+                ProofRule {
+                    x: 0.28,
+                    y: 0.68,
+                    width: 0.86,
+                    thickness: rule_thickness,
+                    dashed: false,
+                },
+            ],
+        },
+        color: options.color,
+    }
+}
+
+fn make_measured_by_symbol(options: &LayoutOptions) -> LayoutBox {
+    let width = 0.98;
+    let height = 0.56;
+    let depth = 0.30;
+    let rule_thickness = 0.055;
+    let m_metrics = get_char_metrics(FontId::MainRegular, 'm' as u32);
+    let (m_width, m_height, m_depth) = m_metrics
+        .map(|m| (m.width, m.height, m.depth))
+        .unwrap_or((0.78, 0.43, 0.0));
+    let m_scale = 0.61;
+    let m_glyph = LayoutBox {
+        width: m_width,
+        height: m_height,
+        depth: m_depth,
+        content: BoxContent::Glyph {
+            font_id: FontId::MainRegular,
+            char_code: 'm' as u32,
+        },
+        color: options.color,
+    };
+    let m_box = LayoutBox {
+        width: m_width * m_scale,
+        height: m_height * m_scale,
+        depth: m_depth * m_scale,
+        content: BoxContent::Scaled {
+            body: Box::new(m_glyph),
+            child_scale: m_scale,
+        },
+        color: options.color,
+    };
+
+    LayoutBox {
+        width,
+        height,
+        depth,
+        content: BoxContent::ProofTree {
+            children: vec![PlacedBox {
+                box_: m_box,
+                x: (width - m_width * m_scale) / 2.0,
+                baseline_y: 0.02 + m_height * m_scale,
+            }],
+            rules: vec![
+                ProofRule {
+                    x: 0.06,
+                    y: 0.55,
+                    width: 0.86,
+                    thickness: rule_thickness,
+                    dashed: false,
+                },
+                ProofRule {
+                    x: 0.06,
+                    y: 0.78,
+                    width: 0.86,
+                    thickness: rule_thickness,
+                    dashed: false,
+                },
+            ],
+        },
+        color: options.color,
+    }
+}
+
 /// Build a vertical-bar delimiter LayoutBox using the same SVG as KaTeX `tallDelim` (`vert` / `doublevert`).
 /// `total_height` is the requested full span in em (`sizeToMaxHeight` for `\big`/`\Big`/…).
-fn make_vert_delim_box(total_height: f64, is_double: bool, options: &LayoutOptions) -> LayoutBox {
-    let real_h = katex_vert_real_height(total_height, is_double);
+fn make_vert_delim_box(total_height: f64, is_double: bool, is_sized_delim: bool, options: &LayoutOptions) -> LayoutBox {
+    let real_h = katex_vert_real_height(total_height, is_double, is_sized_delim);
     let axis = options.metrics().axis_height;
     let depth = (real_h / 2.0 - axis).max(0.0);
     let height = real_h - depth;
@@ -2307,10 +2474,10 @@ fn make_stretchy_delim(delim: &str, total_height: f64, options: &LayoutOptions) 
     // When the content is small enough, fall through to the normal font glyph.
     const VERT_NATURAL_HEIGHT: f64 = 1.0; // MainRegular |: 0.75+0.25
     if is_vert_delim(delim) && total_height > VERT_NATURAL_HEIGHT {
-        return make_vert_delim_box(total_height, false, options);
+        return make_vert_delim_box(total_height, false, false, options);
     }
     if is_double_vert_delim(delim) && total_height > VERT_NATURAL_HEIGHT {
-        return make_vert_delim_box(total_height, true, options);
+        return make_vert_delim_box(total_height, true, false, options);
     }
 
     // Normalize < > to \langle \rangle for proper angle bracket glyphs
@@ -2365,11 +2532,11 @@ fn layout_delim_sizing(size: u8, delim: &str, options: &LayoutOptions) -> Layout
     // stackAlwaysDelimiters: render as SVG path at the fixed size height
     if is_vert_delim(delim) {
         let total = SIZE_TO_MAX_HEIGHT[size.min(4) as usize];
-        return make_vert_delim_box(total, false, options);
+        return make_vert_delim_box(total, false, true, options);
     }
     if is_double_vert_delim(delim) {
         let total = SIZE_TO_MAX_HEIGHT[size.min(4) as usize];
-        return make_vert_delim_box(total, true, options);
+        return make_vert_delim_box(total, true, true, options);
     }
 
     // Normalize angle brackets to proper math angle bracket glyphs
@@ -2778,6 +2945,15 @@ fn layout_html(attributes: &HashMap<String, String>, body: &[ParseNode], options
 
     if style.underline {
         lbox = layout_underline_laid_out(lbox, options, body_options.color);
+    }
+
+    if options.leftright_delim_height.is_none() && body_contains_middle(body) {
+        let total = SIZE_TO_MAX_HEIGHT[1];
+        let axis = body_options.metrics().axis_height;
+        let height = total / 2.0 + axis;
+        let depth = total - height;
+        lbox.height = lbox.height.max(height);
+        lbox.depth = lbox.depth.max(depth);
     }
 
     lbox
@@ -3223,7 +3399,8 @@ fn layout_font(font: &str, body: &ParseNode, options: &LayoutOptions) -> LayoutB
     let font_id = match font {
         "mathrm" | "\\mathrm" | "textrm" | "\\textrm" | "rm" | "\\rm" => Some(FontId::MainRegular),
         "mathbf" | "\\mathbf" | "textbf" | "\\textbf" | "bf" | "\\bf" => Some(FontId::MainBold),
-        "mathit" | "\\mathit" | "textit" | "\\textit" | "\\emph" => Some(FontId::MainItalic),
+        "mathit" | "\\mathit" | "it" | "\\it" => Some(FontId::MathItalic),
+        "textit" | "\\textit" | "\\emph" => Some(FontId::MainItalic),
         "mathsf" | "\\mathsf" | "textsf" | "\\textsf" => Some(FontId::SansSerifRegular),
         "mathtt" | "\\mathtt" | "texttt" | "\\texttt" => Some(FontId::TypewriterRegular),
         "mathcal" | "\\mathcal" | "cal" | "\\cal" => Some(FontId::CaligraphicRegular),
@@ -3318,9 +3495,9 @@ fn layout_underline(body: &ParseNode, options: &LayoutOptions) -> LayoutBox {
     let body_box = layout_node(body, options);
     let metrics = options.metrics();
     let rule = metrics.default_rule_thickness;
+    let offset = 4.0 * rule;
 
-    // Total depth: body depth + 2*rule clearance + rule thickness = body.depth + 3*rule
-    let depth = body_box.depth + 3.0 * rule;
+    let depth = body_box.depth + offset + 0.5 * rule;
     LayoutBox {
         width: body_box.width,
         height: body_box.height,
@@ -3328,6 +3505,7 @@ fn layout_underline(body: &ParseNode, options: &LayoutOptions) -> LayoutBox {
         content: BoxContent::Underline {
             body: Box::new(body_box),
             rule_thickness: rule,
+            offset,
         },
         color: options.color,
     }
@@ -3339,16 +3517,24 @@ fn layout_href(body: &[ParseNode], options: &LayoutOptions) -> LayoutBox {
     // Slight tracking matches KaTeX/browser monospace link width in golden PNGs.
     let body_opts = options
         .with_color(link_color)
-        .with_inter_glyph_kern(0.024);
+        .with_inter_glyph_kern(0.05);
     let body_box = layout_expression(body, &body_opts, true);
-    layout_underline_laid_out(body_box, options, link_color)
+    if box_contains_font(&body_box, FontId::TypewriterRegular) {
+        layout_link_underline_laid_out(body_box, options, link_color)
+    } else {
+        body_box
+    }
 }
 
 /// Same geometry as [`layout_underline`], but for an already computed inner box.
 fn layout_underline_laid_out(body_box: LayoutBox, options: &LayoutOptions, color: Color) -> LayoutBox {
     let metrics = options.metrics();
     let rule = metrics.default_rule_thickness;
-    let depth = body_box.depth + 3.0 * rule;
+    layout_underline_laid_out_with_rule(body_box, rule, 2.5 * rule, color)
+}
+
+fn layout_underline_laid_out_with_rule(body_box: LayoutBox, rule: f64, offset: f64, color: Color) -> LayoutBox {
+    let depth = body_box.depth + offset + 0.5 * rule;
     LayoutBox {
         width: body_box.width,
         height: body_box.height,
@@ -3356,6 +3542,109 @@ fn layout_underline_laid_out(body_box: LayoutBox, options: &LayoutOptions, color
         content: BoxContent::Underline {
             body: Box::new(body_box),
             rule_thickness: rule,
+            offset,
+        },
+        color,
+    }
+}
+
+fn box_contains_font(lbox: &LayoutBox, font_id: FontId) -> bool {
+    match &lbox.content {
+        BoxContent::Glyph { font_id: fid, .. } => *fid == font_id,
+        BoxContent::HBox(children) => children.iter().any(|child| box_contains_font(child, font_id)),
+        BoxContent::Scaled { body, .. } | BoxContent::RaiseBox { body, .. } => box_contains_font(body, font_id),
+        _ => false,
+    }
+}
+
+fn link_underline_skip_cuts(lbox: &LayoutBox, x: f64, scale: f64, cuts: &mut Vec<(f64, f64)>) {
+    match &lbox.content {
+        BoxContent::HBox(children) => {
+            let mut cur_x = x;
+            for child in children {
+                link_underline_skip_cuts(child, cur_x, scale, cuts);
+                cur_x += child.width * scale;
+            }
+        }
+        BoxContent::Glyph { char_code, .. } => {
+            if let Some(ch) = char::from_u32(*char_code) {
+                if matches!(ch, 'g' | 'j' | 'p' | 'q' | 'y') {
+                    let pad = (0.04 * scale).min(lbox.width * scale / 3.0);
+                    cuts.push((x + pad, x + lbox.width * scale - pad));
+                }
+            }
+        }
+        BoxContent::Scaled { body, child_scale } => {
+            link_underline_skip_cuts(body, x, scale * child_scale, cuts);
+        }
+        BoxContent::RaiseBox { body, .. } => {
+            link_underline_skip_cuts(body, x, scale, cuts);
+        }
+        _ => {}
+    }
+}
+
+fn link_underline_segments(body_box: &LayoutBox) -> Vec<(f64, f64)> {
+    let mut cuts = Vec::new();
+    link_underline_skip_cuts(body_box, 0.0, 1.0, &mut cuts);
+    if cuts.is_empty() {
+        return vec![(0.0, body_box.width)];
+    }
+    cuts.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut segments = Vec::new();
+    let mut x = 0.0;
+    for (cut_l, cut_r) in cuts {
+        let l = cut_l.clamp(0.0, body_box.width);
+        let r = cut_r.clamp(0.0, body_box.width);
+        if l > x + 0.02 {
+            segments.push((x, l - x));
+        }
+        x = x.max(r);
+    }
+    if body_box.width > x + 0.02 {
+        segments.push((x, body_box.width - x));
+    }
+    if segments.is_empty() {
+        vec![(0.0, body_box.width)]
+    } else {
+        segments
+    }
+}
+
+fn layout_link_underline_laid_out(body_box: LayoutBox, options: &LayoutOptions, color: Color) -> LayoutBox {
+    let metrics = options.metrics();
+    let rule = metrics.default_rule_thickness;
+    let offset = 2.5 * rule;
+    let segments = link_underline_segments(&body_box);
+    if segments.len() <= 1 {
+        return layout_underline_laid_out_with_rule(body_box, rule, offset, color);
+    }
+
+    let height = body_box.height;
+    let depth = body_box.depth + offset + 0.5 * rule;
+    let rule_y = height + body_box.depth + offset;
+    let width = body_box.width;
+    LayoutBox {
+        width,
+        height,
+        depth,
+        content: BoxContent::ProofTree {
+            children: vec![PlacedBox {
+                box_: body_box,
+                x: 0.0,
+                baseline_y: height,
+            }],
+            rules: segments
+                .into_iter()
+                .map(|(x, width)| ProofRule {
+                    x,
+                    y: rule_y,
+                    width,
+                    thickness: rule,
+                    dashed: false,
+                })
+                .collect(),
         },
         color,
     }
@@ -4407,7 +4696,7 @@ fn layout_cd_arrow(
 
             let shaft_box = match direction {
                 "vert_eq" if target_size > 0.0 => {
-                    make_vert_delim_box(target_size.max(big_total), true, options)
+                    make_vert_delim_box(target_size.max(big_total), true, false, options)
                 }
                 "vert_eq" => make_stretchy_delim("\\Vert", big_total, options),
                 "down" if target_size > 0.0 => {
@@ -4616,7 +4905,7 @@ fn layout_cd(body: &[Vec<ParseNode>], options: &LayoutOptions) -> LayoutBox {
     // KaTeX CD uses `pregap: 0.25, postgap: 0.25` per column (cd.ts line 216-217),
     // giving 0.5em between adjacent columns.  `hskipBeforeAndAfter` is unset (false),
     // so no outer padding.
-    let col_gap = 0.5;
+    let col_gap = 0.56;
 
     // Column alignment: objects are centered, arrows are centered
     let col_aligns: Vec<u8> = (0..num_cols).map(|_| b'c').collect();
