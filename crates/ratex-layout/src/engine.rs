@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ratex_font::{get_char_metrics, get_global_metrics, FontId};
 use ratex_parser::parse_node::{
-    ArrayTag, AtomFamily, Mode, ParseNode, ProofBranch, ProofLineStyle,
+    ArrayTag, AtomFamily, Mode, ParseNode, ProofBranch, ProofLineStyle, StyleStr,
 };
 use ratex_types::color::Color;
 use ratex_types::math_style::MathStyle;
@@ -19,6 +19,15 @@ use crate::stacked_delim::make_stacked_delim_if_needed;
 /// TeX `\nulldelimiterspace` = 1.2pt = 0.12em (at 10pt design size).
 /// KaTeX wraps every `\frac` / `\atop` in mopen+mclose nulldelimiter spans of this width.
 const NULL_DELIMITER_SPACE: f64 = 0.12;
+
+fn style_str_to_math_style(style: &StyleStr) -> MathStyle {
+    match style {
+        StyleStr::Display => MathStyle::Display,
+        StyleStr::Text => MathStyle::Text,
+        StyleStr::Script => MathStyle::Script,
+        StyleStr::Scriptscript => MathStyle::ScriptScript,
+    }
+}
 
 /// Main entry point: lay out a list of ParseNodes into a LayoutBox.
 pub fn layout(nodes: &[ParseNode], options: &LayoutOptions) -> LayoutBox {
@@ -309,12 +318,7 @@ fn layout_node(node: &ParseNode, options: &LayoutOptions) -> LayoutBox {
         }
 
         ParseNode::Styling { style, body, .. } => {
-            let new_style = match style {
-                ratex_parser::parse_node::StyleStr::Display => MathStyle::Display,
-                ratex_parser::parse_node::StyleStr::Text => MathStyle::Text,
-                ratex_parser::parse_node::StyleStr::Script => MathStyle::Script,
-                ratex_parser::parse_node::StyleStr::Scriptscript => MathStyle::ScriptScript,
-            };
+            let new_style = style_str_to_math_style(style);
             let ratio = new_style.size_multiplier() / options.style.size_multiplier();
             let new_opts = options.with_style(new_style);
             let inner = layout_expression(body, &new_opts, true);
@@ -1695,12 +1699,10 @@ fn layout_accent(
         return layout_textcircled(body_box, options);
     }
 
-    // Try KaTeX exact SVG paths first (widehat, widetilde, overgroup, etc.)
-    let accent_target_w = if matches!(label, "\\widetilde" | "\\utilde") {
-        base_w * 1.15
-    } else {
-        base_w
-    };
+    // Try KaTeX exact SVG paths first (widehat, widetilde, overgroup, etc.).
+    // The path width must stay inside the accent box; renderers size their canvas from
+    // DisplayList.width, so drawing wider than the box clips in an enclosing HBox.
+    let accent_target_w = base_w;
     if let Some((commands, w, h, fill)) =
         crate::katex_svg::katex_accent_path(label, accent_target_w, accent_ordgroup_len(base))
     {
@@ -1977,57 +1979,72 @@ fn layout_accent(
 /// Returns true if the node (or any descendant in the current `\left...\right`
 /// scope) is a Middle node.  A nested LeftRight starts its own scope, so its
 /// `\middle`s are handled by that nested layout pass.
-fn node_contains_middle(node: &ParseNode) -> bool {
+fn node_contains_middle(node: &ParseNode, style: MathStyle) -> bool {
     match node {
         ParseNode::Middle { .. } => true,
         ParseNode::OrdGroup { body, .. } | ParseNode::MClass { body, .. } => {
-            body.iter().any(node_contains_middle)
+            body.iter().any(|n| node_contains_middle(n, style))
         }
         ParseNode::SupSub { base, sup, sub, .. } => {
-            base.as_deref().is_some_and(node_contains_middle)
-                || sup.as_deref().is_some_and(node_contains_middle)
-                || sub.as_deref().is_some_and(node_contains_middle)
+            base.as_deref().is_some_and(|n| node_contains_middle(n, style))
+                || sup.as_deref().is_some_and(|n| node_contains_middle(n, style.superscript()))
+                || sub.as_deref().is_some_and(|n| node_contains_middle(n, style.subscript()))
         }
         ParseNode::GenFrac { numer, denom, .. } => {
-            node_contains_middle(numer) || node_contains_middle(denom)
+            node_contains_middle(numer, style.numerator())
+                || node_contains_middle(denom, style.denominator())
         }
         ParseNode::Sqrt { body, index, .. } => {
-            node_contains_middle(body) || index.as_deref().is_some_and(node_contains_middle)
+            node_contains_middle(body, style.cramped())
+                || index
+                    .as_deref()
+                    .is_some_and(|n| node_contains_middle(n, style.superscript().superscript()))
         }
         ParseNode::Accent { base, .. } | ParseNode::AccentUnder { base, .. } => {
-            node_contains_middle(base)
+            node_contains_middle(base, style)
         }
         ParseNode::Op { body, .. } => body
             .as_ref()
-            .is_some_and(|b| b.iter().any(node_contains_middle)),
+            .is_some_and(|b| b.iter().any(|n| node_contains_middle(n, style))),
         ParseNode::LeftRight { .. } => false,
-        ParseNode::OperatorName { body, .. } => body.iter().any(node_contains_middle),
-        ParseNode::Font { body, .. } => node_contains_middle(body),
-        ParseNode::Text { body, .. }
-        | ParseNode::Color { body, .. }
-        | ParseNode::Styling { body, .. }
-        | ParseNode::Sizing { body, .. } => body.iter().any(node_contains_middle),
-        ParseNode::Overline { body, .. } | ParseNode::Underline { body, .. } => {
-            node_contains_middle(body)
+        ParseNode::OperatorName { body, .. } => body.iter().any(|n| node_contains_middle(n, style)),
+        ParseNode::Font { body, .. } => node_contains_middle(body, style),
+        ParseNode::Text { body, .. } | ParseNode::Sizing { body, .. } => {
+            body.iter().any(|n| node_contains_middle(n, style.text()))
         }
-        ParseNode::Phantom { body, .. } => body.iter().any(node_contains_middle),
+        ParseNode::Color { body, .. } => body.iter().any(|n| node_contains_middle(n, style)),
+        ParseNode::Styling { style: node_style, body, .. } => {
+            let new_style = style_str_to_math_style(node_style);
+            body.iter().any(|n| node_contains_middle(n, new_style))
+        }
+        ParseNode::Overline { body, .. } | ParseNode::Underline { body, .. } => {
+            node_contains_middle(body, style)
+        }
+        ParseNode::Phantom { body, .. } => body.iter().any(|n| node_contains_middle(n, style)),
         ParseNode::VPhantom { body, .. } | ParseNode::Smash { body, .. } => {
-            node_contains_middle(body)
+            node_contains_middle(body, style)
         }
         ParseNode::Array { body, .. } => body
             .iter()
-            .any(|row| row.iter().any(node_contains_middle)),
+            .any(|row| row.iter().any(|n| node_contains_middle(n, style))),
         ParseNode::Enclose { body, .. }
         | ParseNode::Lap { body, .. }
         | ParseNode::RaiseBox { body, .. }
-        | ParseNode::VCenter { body, .. } => node_contains_middle(body),
-        ParseNode::Pmb { body, .. } => body.iter().any(node_contains_middle),
+        | ParseNode::VCenter { body, .. } => node_contains_middle(body, style),
+        ParseNode::Pmb { body, .. } => body.iter().any(|n| node_contains_middle(n, style)),
         ParseNode::XArrow { body, below, .. } => {
-            node_contains_middle(body) || below.as_deref().is_some_and(node_contains_middle)
+            node_contains_middle(body, style.superscript())
+                || below
+                    .as_deref()
+                    .is_some_and(|n| node_contains_middle(n, style.subscript()))
         }
         ParseNode::CdArrow { label_above, label_below, .. } => {
-            label_above.as_deref().is_some_and(node_contains_middle)
-                || label_below.as_deref().is_some_and(node_contains_middle)
+            label_above
+                .as_deref()
+                .is_some_and(|n| node_contains_middle(n, style.superscript()))
+                || label_below
+                    .as_deref()
+                    .is_some_and(|n| node_contains_middle(n, style.subscript()))
         }
         ParseNode::MathChoice {
             display,
@@ -2036,22 +2053,26 @@ fn node_contains_middle(node: &ParseNode) -> bool {
             scriptscript,
             ..
         } => {
-            display.iter().any(node_contains_middle)
-                || text.iter().any(node_contains_middle)
-                || script.iter().any(node_contains_middle)
-                || scriptscript.iter().any(node_contains_middle)
+            let branch = match style {
+                MathStyle::Display | MathStyle::DisplayCramped => display,
+                MathStyle::Text | MathStyle::TextCramped => text,
+                MathStyle::Script | MathStyle::ScriptCramped => script,
+                MathStyle::ScriptScript | MathStyle::ScriptScriptCramped => scriptscript,
+            };
+            branch.iter().any(|n| node_contains_middle(n, style))
         }
-        ParseNode::HorizBrace { base, .. } => node_contains_middle(base),
-        ParseNode::Href { body, .. } => body.iter().any(node_contains_middle),
-        ParseNode::Html { body, .. } => body.iter().any(node_contains_middle),
+        ParseNode::HorizBrace { base, .. } => node_contains_middle(base, style),
+        ParseNode::Href { body, .. } | ParseNode::Html { body, .. } => {
+            body.iter().any(|n| node_contains_middle(n, style))
+        }
         _ => false,
     }
 }
 
 /// Returns true if any node in the slice contains a Middle node governed by the
 /// current `\left...\right` pass.
-fn body_contains_middle(nodes: &[ParseNode]) -> bool {
-    nodes.iter().any(node_contains_middle)
+fn body_contains_middle(nodes: &[ParseNode], style: MathStyle) -> bool {
+    nodes.iter().any(|n| node_contains_middle(n, style))
 }
 
 /// KaTeX genfrac HTML Rule 15e: `\binom`, `\brace`, `\brack`, `\atop` use `delim1`/`delim2`
@@ -2093,7 +2114,7 @@ fn layout_left_right(
     right_delim: &str,
     options: &LayoutOptions,
 ) -> LayoutBox {
-    let (inner, total_height) = if body_contains_middle(body) {
+    let (inner, total_height) = if body_contains_middle(body, options.style) {
         // First pass: layout with no delim height so \middle doesn't inflate inner size.
         let opts_first = LayoutOptions {
             leftright_delim_height: None,
@@ -2950,7 +2971,7 @@ fn layout_html(attributes: &HashMap<String, String>, body: &[ParseNode], options
         lbox = layout_underline_laid_out(lbox, options, body_options.color);
     }
 
-    if options.leftright_delim_height.is_none() && body_contains_middle(body) {
+    if options.leftright_delim_height.is_none() && body_contains_middle(body, body_options.style) {
         let total = SIZE_TO_MAX_HEIGHT[1];
         let axis = body_options.metrics().axis_height;
         let height = total / 2.0 + axis;

@@ -10,7 +10,8 @@ use ratex_layout::to_display_list;
 use ratex_parser::parser::parse;
 use ratex_types::MathStyle;
 use ratex_types::color::Color;
-use ratex_types::display_item::DisplayItem;
+use ratex_types::display_item::{DisplayItem, DisplayList};
+use ratex_types::path_command::PathCommand;
 
 const TOLERANCE: f64 = 0.002;
 
@@ -38,6 +39,33 @@ fn layout_with_style(input: &str, style: MathStyle) -> ratex_layout::LayoutBox {
     let ast = parse(input).unwrap_or_else(|e| panic!("Parse error for `{input}`: {e}"));
     let options = LayoutOptions::default().with_style(style);
     layout(&ast, &options)
+}
+
+fn max_path_x(display: &DisplayList) -> f64 {
+    let mut max_x = f64::NEG_INFINITY;
+
+    for item in &display.items {
+        let DisplayItem::Path { x, commands, .. } = item else {
+            continue;
+        };
+
+        for command in commands {
+            match command {
+                PathCommand::MoveTo { x: cx, .. } | PathCommand::LineTo { x: cx, .. } => {
+                    max_x = max_x.max(*x + *cx);
+                }
+                PathCommand::CubicTo { x1, x2, x: cx, .. } => {
+                    max_x = max_x.max(*x + *x1).max(*x + *x2).max(*x + *cx);
+                }
+                PathCommand::QuadTo { x1, x: cx, .. } => {
+                    max_x = max_x.max(*x + *x1).max(*x + *cx);
+                }
+                PathCommand::Close => {}
+            }
+        }
+    }
+
+    max_x
 }
 
 #[test]
@@ -91,6 +119,56 @@ fn htmlstyle_nested_leftright_middle_keeps_inner_metrics() {
         "HTML wrapper should not reserve current-pass \\middle depth for nested LeftRight: inner depth {:.5}, wrapped depth {:.5}",
         inner.depth,
         wrapped.depth,
+    );
+}
+
+#[test]
+fn htmlstyle_mathchoice_ignores_middle_in_unselected_branch() {
+    let options = LayoutOptions::default();
+    let plain = layout(
+        &parse("\\left( \\htmlStyle{background-color: yellow;}{x} \\right)").unwrap(),
+        &options,
+    );
+    let with_unselected_middle = layout(
+        &parse("\\left( \\htmlStyle{background-color: yellow;}{\\mathchoice{x}{x \\middle| y}{x}{x}} \\right)").unwrap(),
+        &options,
+    );
+
+    assert!(
+        (with_unselected_middle.height - plain.height).abs() < TOLERANCE,
+        "HTML wrapper should not reserve \\middle height from unselected \\mathchoice branch: plain height {:.5}, wrapped height {:.5}",
+        plain.height,
+        with_unselected_middle.height,
+    );
+    assert!(
+        (with_unselected_middle.depth - plain.depth).abs() < TOLERANCE,
+        "HTML wrapper should not reserve \\middle depth from unselected \\mathchoice branch: plain depth {:.5}, wrapped depth {:.5}",
+        plain.depth,
+        with_unselected_middle.depth,
+    );
+    assert!(
+        (with_unselected_middle.width - plain.width).abs() < TOLERANCE,
+        "HTML wrapper should not choose larger delimiters from unselected \\mathchoice branch: plain width {:.5}, wrapped width {:.5}",
+        plain.width,
+        with_unselected_middle.width,
+    );
+}
+
+#[test]
+fn widetilde_path_stays_inside_display_width_after_previous_glyph() {
+    let ast = parse("x\\widetilde{x}").unwrap();
+    let options = LayoutOptions::default();
+    let display = to_display_list(&layout(&ast, &options));
+    let max_path_x = max_path_x(&display);
+
+    assert!(
+        max_path_x.is_finite(),
+        "Expected \\widetilde to emit an SVG path"
+    );
+    assert!(
+        max_path_x <= display.width + TOLERANCE,
+        "\\widetilde path should stay within display width: max path x {max_path_x:.5}, display width {:.5}",
+        display.width,
     );
 }
 
