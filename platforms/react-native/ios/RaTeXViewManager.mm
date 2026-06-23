@@ -19,8 +19,14 @@
 #import <UIKit/UIKit.h>
 #endif
 
-// Swift-generated header (module name derived from podspec/target name)
-#import "ratex_react_native-Swift.h"
+// Swift-generated header (module name derived from podspec/target name).
+// Use the framework/module form (<module/module-Swift.h>) rather than the quote
+// form: the quote form creates no module dependency, so this Objective-C++ TU can
+// be scheduled to compile BEFORE the Swift target has generated the -Swift.h
+// header — a non-deterministic build race that fails `xcodebuild` (and EAS/CI)
+// with "ratex_react_native-Swift.h file not found". The angle/module form forces
+// the Swift module to build first.
+#import <ratex_react_native/ratex_react_native-Swift.h>
 #import "RaTeXColorUtils.h"
 
 // ---------------------------------------------------------------------------
