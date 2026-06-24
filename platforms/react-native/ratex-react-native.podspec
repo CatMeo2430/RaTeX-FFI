@@ -14,6 +14,15 @@ Pod::Spec.new do |s|
 
   # Swift source files + ObjC++ bridge
   s.source_files   = "ios/**/*.{h,m,mm,swift}"
+  # The vendored XCFramework ships a `ratex.h` inside every slice's Headers/ dir
+  # (ios-arm64, ios-arm64_x86_64-simulator, macos-arm64_x86_64). Without this
+  # exclude, the recursive source_files glob picks up all three copies and
+  # CocoaPods emits three CpHeader build commands that resolve to the same output
+  # path → Xcode 15+ fails the build with
+  #   "Multiple commands produce '…/ratex-react-native/ratex.h'".
+  # The framework's headers are exposed through its module (vendored_frameworks),
+  # not through source_files, so excluding them here is safe.
+  s.exclude_files  = "ios/RaTeX.xcframework/**/*"
   s.swift_version  = "5.9"
 
   # Prebuilt static library (libratex_ffi.a) packaged as XCFramework
