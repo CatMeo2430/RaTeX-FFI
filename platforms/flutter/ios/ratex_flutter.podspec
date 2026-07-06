@@ -31,11 +31,9 @@ Pod::Spec.new do |s|
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
   }
 
-  # Force-load the static library into the app binary so that
-  # DynamicLibrary.process() / dlsym(RTLD_DEFAULT, ...) can find the
-  # ratex_parse_and_layout symbol at runtime.  Without this the linker
-  # dead-strips the unreferenced C symbols before Dart FFI can look them up.
+  # Keep the FFI entry points reachable for DynamicLibrary.process() without
+  # passing the generated libratex_ffi.a path as a direct Xcode build input.
   s.user_target_xcconfig = {
-    'OTHER_LDFLAGS' => '-force_load ${PODS_XCFRAMEWORKS_BUILD_DIR}/ratex_flutter/libratex_ffi.a',
+    'OTHER_LDFLAGS' => '-Wl,-u,_ratex_parse_and_layout -Wl,-u,_ratex_free_display_list -Wl,-u,_ratex_get_last_error -l"ratex_ffi"',
   }
 end
