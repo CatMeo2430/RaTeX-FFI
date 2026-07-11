@@ -1,4 +1,4 @@
-// Auto-generated from KaTeX symbols.ts - DO NOT EDIT
+// Auto-generated from KaTeX symbols.ts and RaTeX extensions - DO NOT EDIT
 
 /// Symbol definition: (name, mode, font, group, codepoint)
 /// mode: 0 = math, 1 = text
@@ -1890,4 +1890,14 @@ pub static SYMBOLS: &[SymbolEntry] = &[
     ("\\@urcorner", 0, 1, "close", Some('\u{2510}')),
     ("\\@llcorner", 0, 1, "open", Some('\u{2514}')),
     ("\\@lrcorner", 0, 1, "close", Some('\u{2518}')),
+    // RaTeX-specific symbol aliases
+    ("\u{25CB}", 0, 0, "textord", Some('\u{25EF}')),
+];
+
+/// RaTeX-specific glyph fitting: (name, mode, target font, target glyph)
+pub type SymbolRenderSpecEntry = (&'static str, u8, u8, char);
+
+pub static SYMBOL_RENDER_SPECS: &[SymbolRenderSpecEntry] = &[
+    // Fit replacement glyphs to their semantic peers' metric boxes.
+    ("\u{25CB}", 0, 1, '\u{25A1}'),
 ];

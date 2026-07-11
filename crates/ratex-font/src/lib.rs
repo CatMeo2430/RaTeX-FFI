@@ -11,5 +11,6 @@ pub use metrics::{
     get_global_metrics, CharMetrics, MathConstants, MATH_CONSTANTS_BY_SIZE,
 };
 pub use symbols::{
-    get_math_symbol, get_symbol, get_text_symbol, Group, Mode, SymbolFont, SymbolInfo,
+    get_math_symbol, get_symbol, get_symbol_render_spec, get_text_symbol, Group, Mode, SymbolFont,
+    SymbolInfo, SymbolRenderSpec,
 };

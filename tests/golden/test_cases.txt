@@ -1047,3 +1047,4 @@ a · b
 ⨄_{m} P_m
 ⨆_{n} Q_n
 \textcolor{#ff000050}{x}
+○\div□=5\quad□\div○=5

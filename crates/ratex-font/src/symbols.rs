@@ -85,6 +85,14 @@ pub struct SymbolInfo {
     pub codepoint: Option<char>,
 }
 
+/// Presentation metadata for a symbol whose bundled replacement glyph must be
+/// fitted to another symbol's metric box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SymbolRenderSpec {
+    pub target_font: SymbolFont,
+    pub target_codepoint: char,
+}
+
 /// (mode, name) → index into SYMBOLS array
 type SymbolIndex = HashMap<(u8, &'static str), usize>;
 /// (mode, codepoint) → index into SYMBOLS array
@@ -172,6 +180,25 @@ pub fn get_symbol_by_codepoint(ch: char, mode: Mode) -> Option<SymbolInfo> {
         .by_codepoint
         .get(&(mode_val, ch))
         .map(|&idx| entry_to_info(idx, mode))
+}
+
+/// Look up optional data-driven glyph fitting metadata for a symbol.
+pub fn get_symbol_render_spec(name: &str, mode: Mode) -> Option<SymbolRenderSpec> {
+    let mode_val: u8 = match mode {
+        Mode::Math => 0,
+        Mode::Text => 1,
+    };
+    symbols_data::SYMBOL_RENDER_SPECS
+        .iter()
+        .find(|&&(entry_name, entry_mode, _, _)| entry_name == name && entry_mode == mode_val)
+        .map(|&(_, _, target_font, target_codepoint)| SymbolRenderSpec {
+            target_font: if target_font == 0 {
+                SymbolFont::Main
+            } else {
+                SymbolFont::Ams
+            },
+            target_codepoint,
+        })
 }
 
 #[cfg(test)]
@@ -293,5 +320,39 @@ mod tests {
         assert_eq!(sym.name, "\\alpha");
         assert_eq!(sym.group, Group::MathOrd);
         assert_eq!(sym.codepoint, Some('α'));
+    }
+
+    #[test]
+    fn white_circle_uses_large_circle_glyph_as_textord() {
+        let sym = get_symbol("○", Mode::Math).unwrap();
+        assert_eq!(sym.name, "○");
+        assert_eq!(sym.group, Group::TextOrd);
+        assert_eq!(sym.font, SymbolFont::Main);
+        assert_eq!(sym.codepoint, Some('◯'));
+        assert_eq!(
+            get_symbol_render_spec("○", Mode::Math),
+            Some(SymbolRenderSpec {
+                target_font: SymbolFont::Ams,
+                target_codepoint: '□',
+            })
+        );
+
+        let bigcirc = get_math_symbol("\\bigcirc").unwrap();
+        assert_eq!(bigcirc.group, Group::Bin);
+        assert_eq!(bigcirc.codepoint, Some('◯'));
+
+        // U+25EF LARGE CIRCLE remains the raw-Unicode spelling of \bigcirc.
+        // The U+25CB alias is appended after KaTeX symbols specifically so it
+        // cannot take precedence in the replacement-codepoint index.
+        let raw_bigcirc = get_symbol("◯", Mode::Math).unwrap();
+        assert_eq!(raw_bigcirc.name, "\\bigcirc");
+        assert_eq!(raw_bigcirc.group, Group::Bin);
+        assert_eq!(raw_bigcirc.codepoint, Some('◯'));
+    }
+
+    #[test]
+    fn white_circle_extension_is_math_mode_only() {
+        assert!(get_symbol("○", Mode::Text).is_none());
+        assert!(get_symbol_render_spec("○", Mode::Text).is_none());
     }
 }

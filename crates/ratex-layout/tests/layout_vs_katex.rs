@@ -273,6 +273,77 @@ fn binary_op_a_plus_b() {
 }
 
 #[test]
+fn unicode_white_circle_matches_square_metric_box() {
+    let circle = layout_with_style("○", MathStyle::Display);
+    let square = layout_with_style("□", MathStyle::Display);
+    let bigcirc = layout_with_style("\\bigcirc", MathStyle::Display);
+    let circle_expr = layout_with_style("○\\div□=5", MathStyle::Display);
+    let square_expr = layout_with_style("□\\div□=5", MathStyle::Display);
+    let bold_circle = layout_with_style("\\mathbf{○}", MathStyle::Display);
+
+    assert!((circle.width - square.width).abs() < TOLERANCE);
+    assert!((circle.height - square.height).abs() < TOLERANCE);
+    assert!((circle.depth - square.depth).abs() < TOLERANCE);
+    assert!(bigcirc.width > circle.width);
+    assert!((circle_expr.width - square_expr.width).abs() < TOLERANCE);
+    assert!((bold_circle.width - square.width).abs() < TOLERANCE);
+    assert!((bold_circle.height - square.height).abs() < TOLERANCE);
+    assert!((bold_circle.depth - square.depth).abs() < TOLERANCE);
+
+    let circle_display = to_display_list(&circle);
+    let square_display = to_display_list(&square);
+    let glyph_bounds = |display: &DisplayList| {
+        display
+            .items
+            .iter()
+            .find_map(|item| match item {
+                DisplayItem::GlyphPath {
+                    x,
+                    y,
+                    scale,
+                    font,
+                    char_code,
+                    ..
+                } => {
+                    let font_id = ratex_font::FontId::parse(font).unwrap();
+                    let metrics = ratex_font::get_char_metrics(font_id, *char_code).unwrap();
+                    Some((
+                        *x,
+                        x + metrics.width * scale,
+                        y - metrics.height * scale,
+                        y + metrics.depth * scale,
+                        *scale,
+                        font_id,
+                        *char_code,
+                    ))
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    let circle_glyph = glyph_bounds(&circle_display);
+    let square_glyph = glyph_bounds(&square_display);
+
+    assert_eq!(circle_glyph.5, ratex_font::FontId::MainRegular);
+    assert_eq!(circle_glyph.6, '◯' as u32);
+    assert!(circle_glyph.4 < 1.0);
+    assert!((circle_glyph.0 + circle_glyph.1 - square_glyph.0 - square_glyph.1).abs() < TOLERANCE);
+    assert!((circle_glyph.2 - square_glyph.2).abs() < TOLERANCE);
+    assert!((circle_glyph.3 - square_glyph.3).abs() < TOLERANCE);
+
+    let bold_display = to_display_list(&bold_circle);
+    assert!(bold_display.items.iter().any(|item| matches!(
+        item,
+        DisplayItem::GlyphPath {
+            font,
+            char_code,
+            scale,
+            ..
+        } if font == "Main-Bold" && *char_code == '◯' as u32 && *scale < 1.0
+    )));
+}
+
+#[test]
 fn relational_eq() {
     check("a+b=c", 0.69444, 0.08333);
 }

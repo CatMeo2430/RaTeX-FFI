@@ -31,6 +31,20 @@ mod core_parsing {
     }
 
     #[test]
+    fn unicode_white_circle_is_math_textord() {
+        let ast = parse("○").unwrap();
+        assert_eq!(ast.len(), 1);
+        assert!(matches!(
+            &ast[0],
+            ParseNode::TextOrd {
+                mode: crate::Mode::Math,
+                text,
+                ..
+            } if text == "○"
+        ));
+    }
+
+    #[test]
     fn empty_input() {
         let ast = parse("").unwrap();
         assert!(ast.is_empty());

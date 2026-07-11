@@ -724,6 +724,9 @@ fn layout_symbol(text: &str, mode: Mode, options: &LayoutOptions) -> LayoutBox {
     if text == "\\textunderscore" {
         return make_textunderscore_box(options);
     }
+    if let Some(fitted) = layout_symbol_from_render_spec(text, mode, options, None) {
+        return fitted;
+    }
 
     // Synthetic symbols not present in any KaTeX font; built from SVG paths.
     match ch as u32 {
@@ -798,6 +801,101 @@ fn layout_symbol(text: &str, mode: Mode, options: &LayoutOptions) -> LayoutBox {
         depth,
         content: BoxContent::Glyph { font_id, char_code },
         color: options.color,
+    }
+}
+
+/// Fit a bundled replacement glyph into another symbol's metric box.
+///
+/// This keeps the input symbol's TeX atom class independent from presentation:
+/// U+25CB WHITE CIRCLE remains an ordinary atom, while its bundled U+25EF glyph
+/// is uniformly scaled and centered in U+25A1 WHITE SQUARE's metric box.
+fn layout_symbol_from_render_spec(
+    text: &str,
+    mode: Mode,
+    options: &LayoutOptions,
+    preferred_source_font: Option<FontId>,
+) -> Option<LayoutBox> {
+    let symbol_mode = match mode {
+        Mode::Math => ratex_font::Mode::Math,
+        Mode::Text => ratex_font::Mode::Text,
+    };
+    let spec = ratex_font::get_symbol_render_spec(text, symbol_mode)?;
+    let symbol = ratex_font::get_symbol(text, symbol_mode)?;
+    let source_codepoint = symbol.codepoint? as u32;
+    let default_source_font = symbol_font_id(symbol.font);
+    let target_font = symbol_font_id(spec.target_font);
+
+    let (source_font, source) = preferred_source_font
+        .and_then(|font_id| {
+            get_char_metrics(font_id, source_codepoint).map(|metrics| (font_id, metrics))
+        })
+        .or_else(|| {
+            get_char_metrics(default_source_font, source_codepoint)
+                .map(|metrics| (default_source_font, metrics))
+        })?;
+    let target = get_char_metrics(target_font, spec.target_codepoint as u32)?;
+
+    let source_width = math_glyph_advance_em(&source, mode);
+    let source_total = source.height + source.depth;
+    let target_width = math_glyph_advance_em(&target, mode);
+    let target_total = target.height + target.depth;
+    if source_width <= 0.0 || source_total <= 0.0 || target_width <= 0.0 || target_total <= 0.0 {
+        return None;
+    }
+
+    // Preserve the replacement glyph's aspect ratio and contain it in the
+    // target box. Any spare space is divided equally on the corresponding axis.
+    let glyph_scale = (target_width / source_width).min(target_total / source_total);
+    let scaled_width = source_width * glyph_scale;
+    let side_padding = ((target_width - scaled_width) / 2.0).max(0.0);
+    let source_center = (source.height - source.depth) * glyph_scale / 2.0;
+    let target_center = (target.height - target.depth) / 2.0;
+    let raise = target_center - source_center;
+
+    let glyph = LayoutBox {
+        width: source_width,
+        height: source.height,
+        depth: source.depth,
+        content: BoxContent::Glyph {
+            font_id: source_font,
+            char_code: source_codepoint,
+        },
+        color: options.color,
+    };
+    let scaled = LayoutBox {
+        width: scaled_width,
+        height: source.height * glyph_scale,
+        depth: source.depth * glyph_scale,
+        content: BoxContent::Scaled {
+            body: Box::new(glyph),
+            child_scale: glyph_scale,
+        },
+        color: options.color,
+    };
+    let centered = LayoutBox {
+        width: scaled_width,
+        height: target.height,
+        depth: target.depth,
+        content: BoxContent::RaiseBox {
+            body: Box::new(scaled),
+            shift: raise,
+        },
+        color: options.color,
+    };
+
+    let mut result = make_hbox(vec![
+        LayoutBox::new_kern(side_padding),
+        centered,
+        LayoutBox::new_kern(side_padding),
+    ]);
+    result.color = options.color;
+    Some(result)
+}
+
+fn symbol_font_id(font: ratex_font::SymbolFont) -> FontId {
+    match font {
+        ratex_font::SymbolFont::Main => FontId::MainRegular,
+        ratex_font::SymbolFont::Ams => FontId::AmsRegular,
     }
 }
 
@@ -3566,6 +3664,11 @@ fn layout_with_font(node: &ParseNode, font_id: FontId, options: &LayoutOptions) 
         ParseNode::MathOrd { text, mode, .. }
         | ParseNode::TextOrd { text, mode, .. }
         | ParseNode::Atom { text, mode, .. } => {
+            if let Some(fitted) =
+                layout_symbol_from_render_spec(text, *mode, options, Some(font_id))
+            {
+                return fitted;
+            }
             let ch = resolve_symbol_char(text, *mode);
             let char_code = ch as u32;
             let metric_cp = ratex_font::font_and_metric_for_mathematical_alphanumeric(char_code)
