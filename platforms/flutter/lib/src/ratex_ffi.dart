@@ -72,7 +72,7 @@ DynamicLibrary _openLib() {
     return DynamicLibrary.open('libratex_ffi.so');
   }
   if (Platform.isIOS || Platform.isMacOS) {
-    // iOS: static library is force-loaded into the process via CocoaPods
+    // iOS: static library is linked into the process via CocoaPods
     // macOS: dynamic library is linked via vendored_libraries in the podspec
     return DynamicLibrary.process();
   }

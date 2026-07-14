@@ -85,8 +85,8 @@ jobs:
         run: |
           mkdir -p platforms/flutter/android/src/main/jniLibs
           cp -R platforms/android/src/main/jniLibs/* platforms/flutter/android/src/main/jniLibs/
-          rm -rf platforms/flutter/ios/RaTeX.xcframework
-          cp -R platforms/ios/RaTeX.xcframework platforms/flutter/ios/
+          rm -rf platforms/flutter/ios/ratex_flutter/RaTeX.xcframework
+          cp -R platforms/ios/RaTeX.xcframework platforms/flutter/ios/ratex_flutter/
 
           # macOS universal dylib
           test -f platforms/flutter/macos/Libraries/libratex_ffi.dylib || \
@@ -118,6 +118,9 @@ jobs:
           cd platforms/flutter
           flutter pub get
           dart analyze
+
+      - name: Verify CocoaPods and SwiftPM iOS release linkage
+        run: bash platforms/flutter/tool/verify-ios-integration.sh
 
       - name: Publish to pub.dev
         run: |

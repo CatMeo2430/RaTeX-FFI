@@ -47,6 +47,16 @@ dependencies:
 
 然后执行 `flutter pub get`。无需本地构建 — 已发布包内含预编译的 Android `.so`、iOS `RaTeX.xcframework`、macOS `.dylib`、Windows `.dll`、Linux `.so`。
 
+#### iOS 依赖管理器
+
+本插件同时支持 Swift Package Manager 和 CocoaPods。Flutter 3.44 及更高版本默认使用 SwiftPM；若使用 Flutter 3.24 至 3.43，或此前禁用了 SwiftPM，请在执行 `flutter pub get` 或构建应用前启用：
+
+```bash
+flutter config --enable-swift-package-manager
+```
+
+Flutter 3.24 之前的版本不支持 SwiftPM 项目迁移，应继续使用 CocoaPods。禁用 SwiftPM 时，Flutter 会改用 CocoaPods 集成。两种依赖管理器共用包内的 `RaTeX.xcframework`。
+
 #### 字体配置
 
 Flutter 要求宿主应用显式声明来自插件包的字体（[Flutter 文档](https://docs.flutter.dev/cookbook/design/package-fonts#from-a-package)）。请将以下内容添加到 `pubspec.yaml` 的 `flutter:` 节：
@@ -256,7 +266,7 @@ final dl = await compute(
 | 文件 | 说明 |
 |------|------|
 | `pubspec.yaml` | Flutter 插件清单 |
-| `ios/` | iOS 插件（podspec + RaTeXPlugin.swift）；链接 RaTeX.xcframework |
+| `ios/` | iOS 插件（CocoaPods podspec + SwiftPM package）；链接 RaTeX.xcframework |
 | `android/` | Android 插件（RaTeXPlugin.kt）；使用包内 `jniLibs` 中的 `libratex_ffi.so` |
 | `macos/` | macOS 插件（podspec + RaTeXPlugin.swift）；链接 universal `.dylib` |
 | `windows/` | Windows 插件（CMake + C++ 桩）；包含 `ratex_ffi.dll` |
@@ -283,10 +293,11 @@ final dl = await compute(
    ```bash
    # 在仓库根目录
    ./platforms/ios/build-ios.sh
-   # 若 platforms/flutter/ios/RaTeX.xcframework 为符号链接，替换为实体拷贝：
-   rm -rf platforms/flutter/ios/RaTeX.xcframework
-   cp -R platforms/ios/RaTeX.xcframework platforms/flutter/ios/
+   # 若包内的 XCFramework 为符号链接，替换为实体拷贝：
+   rm -rf platforms/flutter/ios/ratex_flutter/RaTeX.xcframework
+   cp -R platforms/ios/RaTeX.xcframework platforms/flutter/ios/ratex_flutter/
    ```
+   CocoaPods 与 SwiftPM 共用这个打包后的 XCFramework。
 
 3. **桌面平台** — 构建并注入各平台原生库：
    ```bash
