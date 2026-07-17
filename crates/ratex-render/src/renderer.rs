@@ -34,10 +34,18 @@ impl Default for RenderOptions {
     }
 }
 
-pub fn render_to_png(
+/// Premultiplied RGBA8 bitmap produced by [`render_to_rgba`].
+pub struct RenderedBitmap {
+    pub width: u32,
+    pub height: u32,
+    pub stride: u32,
+    pub data: Vec<u8>,
+}
+
+fn layout_pixels(
     display_list: &DisplayList,
     options: &RenderOptions,
-) -> Result<Vec<u8>, String> {
+) -> (u32, u32, f32, f32, f32) {
     let em = options.font_size;
     let pad = options.padding;
     let dpr = options.device_pixel_ratio.clamp(0.01, 16.0);
@@ -48,17 +56,39 @@ pub fn render_to_png(
     let img_w = (display_list.width as f32 * em_px + 2.0 * pad_px).ceil() as u32;
     let img_h = (total_h as f32 * em_px + 2.0 * pad_px).ceil() as u32;
 
-    let img_w = img_w.max(1);
-    let img_h = img_h.max(1);
+    (img_w.max(1), img_h.max(1), em_px, pad_px, dpr)
+}
+
+/// Rasterize a display list to a premultiplied RGBA8 buffer (row-major, top-to-bottom).
+pub fn render_to_rgba(
+    display_list: &DisplayList,
+    options: &RenderOptions,
+) -> Result<RenderedBitmap, String> {
+    let (img_w, img_h, em_px, pad_px, dpr) = layout_pixels(display_list, options);
 
     let mut pixmap = Pixmap::new(img_w, img_h)
         .ok_or_else(|| format!("Failed to create pixmap {}x{}", img_w, img_h))?;
 
     pixmap.fill(to_tiny_skia_color(options.background_color));
-
-    // Lazy font loading is shared across renderers and source-aware by font_dir.
     render_with_fonts(&mut pixmap, display_list, options, em_px, pad_px, dpr)?;
 
+    Ok(RenderedBitmap {
+        width: pixmap.width(),
+        height: pixmap.height(),
+        stride: pixmap.width() * 4,
+        data: pixmap.data().to_vec(),
+    })
+}
+
+pub fn render_to_png(
+    display_list: &DisplayList,
+    options: &RenderOptions,
+) -> Result<Vec<u8>, String> {
+    let rendered = render_to_rgba(display_list, options)?;
+    let size = tiny_skia::IntSize::from_wh(rendered.width, rendered.height)
+        .ok_or_else(|| format!("Invalid pixmap size {}x{}", rendered.width, rendered.height))?;
+    let pixmap = Pixmap::from_vec(rendered.data, size)
+        .ok_or_else(|| "Failed to reconstruct pixmap for PNG encode".to_string())?;
     encode_png(&pixmap)
 }
 

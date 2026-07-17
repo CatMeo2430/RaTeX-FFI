@@ -1,6 +1,0 @@
-# Gradle (when building from this module directly)
-build/
-.gradle/
-
-# Native libs — built by build-android.sh, copied here; see repo root .gitignore
-src/main/jniLibs/

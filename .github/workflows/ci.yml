@@ -43,6 +43,7 @@ jobs:
           cargo check -p ratex-font-loader --features embed-fonts
           cargo check -p ratex-svg --features standalone,embed-fonts
           cargo check -p ratex-render --features embed-fonts
+          cargo test -p ratex-ffi --features embed-fonts
       - name: Package ratex-katex-fonts (verify tarball includes fonts/)
         run: cargo package -p ratex-katex-fonts
       - name: Bench smoke (compile + run, no timing assertion)
@@ -184,3 +185,115 @@ jobs:
       # GUI window in CI. Building is enough to compile every macOS code path.
       - name: Build macOS SPM demo (compiles Sources/Ratex for AppKit)
         run: swift build --package-path demo/spm-macos
+
+  build-windows-ffi:
+    name: ratex_ffi.dll (x64, MSVC, bitmap)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+          cache-on-failure: true
+
+      - name: Build ratex-ffi (release, embed-fonts)
+        run: cargo build --release -p ratex-ffi --features embed-fonts --target x86_64-pc-windows-msvc
+
+      - name: Test ratex-ffi (release, embed-fonts)
+        run: cargo test --release -p ratex-ffi --features embed-fonts --target x86_64-pc-windows-msvc
+
+      - name: Verify exports
+        shell: pwsh
+        run: |
+          $dll = "target/x86_64-pc-windows-msvc/release/ratex_ffi.dll"
+          if (-not (Test-Path $dll)) {
+            throw "DLL not found: $dll"
+          }
+          $dumpbin = @(
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe"
+          ) | ForEach-Object { Get-Item $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
+          if ($dumpbin) {
+            $exports = & $dumpbin.FullName /EXPORTS $dll
+            $exports | Select-String "ratex_parse_and_layout"
+            $exports | Select-String "ratex_render_bitmap"
+            $exports | Select-String "ratex_free_bitmap"
+          } else {
+            Write-Host "dumpbin not found; skipping export check"
+          }
+          Get-Item $dll | Format-List Name, Length, FullName
+
+      - name: Package dist
+        shell: pwsh
+        run: |
+          $dist = "dist/ratex-ffi-windows-x64"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item "target/x86_64-pc-windows-msvc/release/ratex_ffi.dll" $dist/
+          Copy-Item "crates/ratex-ffi/include/ratex.h" $dist/
+          @"
+          RaTeX FFI — Windows x64 (MSVC, embed-fonts)
+          ===========================================
+
+          Files:
+            ratex_ffi.dll  — P/Invoke from WPF / .NET (CallingConvention.Cdecl)
+            ratex.h        — C struct / function declarations
+
+          Exported functions:
+            ratex_parse_and_layout  — LaTeX -> JSON DisplayList
+            ratex_render_bitmap     — LaTeX -> premultiplied RGBA8 bitmap
+            ratex_free_display_list — free JSON from layout
+            ratex_free_bitmap       — free bitmap from rasterize
+            ratex_get_last_error    — thread-local error string
+
+          Bitmap notes:
+            - Pixel format: premultiplied RGBA8, stride = width * 4
+            - KaTeX fonts are embedded in the DLL (no external fonts/ folder required)
+            - Set background_color.a = 0 for transparency
+
+          WPF bitmap sketch:
+            [DllImport("ratex_ffi", CallingConvention = CallingConvention.Cdecl)]
+            static extern RatexBitmapResult ratex_render_bitmap(
+                [MarshalAs(UnmanagedType.LPUTF8Str)] string latex,
+                ref RatexRenderOptions opts);
+
+            [DllImport("ratex_ffi", CallingConvention = CallingConvention.Cdecl)]
+            static extern void ratex_free_bitmap(RatexBitmap bitmap);
+          "@ | Set-Content -Encoding UTF8 "$dist/README-WPF.txt"
+          Compress-Archive -Path "$dist/*" -DestinationPath ratex-ffi-windows-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ratex-ffi-windows-x64
+          path: |
+            dist/ratex-ffi-windows-x64/ratex_ffi.dll
+            dist/ratex-ffi-windows-x64/ratex.h
+            dist/ratex-ffi-windows-x64/README-WPF.txt
+            ratex-ffi-windows-x64.zip
+          if-no-files-found: error
+
+  release-windows-ffi:
+    name: GitHub Release (tag)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-windows-ffi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ratex-ffi-windows-x64
+          path: artifact
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifact/ratex-ffi-windows-x64.zip
+            artifact/ratex_ffi.dll
+            artifact/ratex.h
+          generate_release_notes: true

@@ -1,5 +1,0 @@
-module CRaTeX [system] {
-    header "include/ratex.h"
-    link "ratex_ffi"
-    export *
-}
