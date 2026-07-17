@@ -1,0 +1,57 @@
+name: Build RaTeX Windows Desktop FFI 7
+on:
+  push:
+    tags:
+      v*
+  workflow_dispatch: # 手动构建调试
+
+jobs:
+  build_windows_x64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install cbindgen
+        run: cargo install cbindgen --force
+
+      # 纯净编译，无feature
+      - name: Compile ratex-ffi cdylib
+        run: cargo build --release -p ratex-ffi --target x86_64-pc-windows-msvc
+        env:
+          RUSTFLAGS: ""
+
+      # 生成C头文件
+      - name: Generate ratex.h
+        run: cbindgen ./crates/ratex-ffi -o ./ratex.h
+
+      # 打包步骤：修正 Release 大写目录
+      - name: Package artifacts
+        run: |
+          New-Item -Path ./dist -ItemType Directory -Force
+          New-Item -Path ./dist/fonts -ItemType Directory -Force
+
+          # Windows MSVC 输出文件夹是 Release 大写！
+          Copy-Item target/x86_64-pc-windows-msvc/Release/ratex.dll ./dist/
+          Copy-Item ./ratex.h ./dist/
+          Copy-Item ./fonts/* ./dist/fonts/ -Recurse -Force
+
+      - name: Upload CI Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ratex-windows-x64-desktop-ffi
+          path: ./dist/
+
+      - name: Publish to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
