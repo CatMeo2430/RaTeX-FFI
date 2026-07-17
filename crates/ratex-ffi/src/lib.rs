@@ -157,11 +157,9 @@ fn do_render_svg(
     latex_str: &str,
     style: MathStyle,
     color: ratex_types::color::Color,
-    render_options: &RenderOptions,
     svg_options: &SvgOptions,
 ) -> Result<String, String> {
     let display_list = do_layout_display_list(latex_str, style, color)?;
-    let _ = color;
     Ok(render_to_svg(&display_list, svg_options))
 }
 
@@ -809,7 +807,6 @@ pub unsafe extern "C" fn ratex_render_svg(
         latex_str,
         parsed.style,
         parsed.layout_color,
-        &parsed.render,
         &svg_options,
     ) {
         Ok(svg) => match string_into_raw(svg) {

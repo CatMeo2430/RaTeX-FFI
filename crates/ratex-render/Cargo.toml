@@ -10,7 +10,6 @@ description = "Raster and image rendering for RaTeX math typesetting"
 
 [dev-dependencies]
 ratex-svg = { workspace = true, features = ["standalone"] }
-ratex-pdf = { workspace = true }
 
 [dependencies]
 ratex-types = { workspace = true }

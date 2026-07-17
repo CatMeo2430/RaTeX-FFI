@@ -1,4 +1,4 @@
-// Comprehensive render benchmark: PNG / SVG / SVG-standalone / PDF — 100 formulas
+// Comprehensive render benchmark: PNG / SVG / SVG-standalone — 100 formulas
 // Run: cargo test --package ratex-render --test bench_render --release -- --nocapture
 
 use std::time::Instant;
@@ -24,7 +24,6 @@ struct BenchResult {
     png_us: u128,
     svg_us: u128,
     svg_standalone_us: u128,
-    pdf_us: u128,
 }
 
 fn bench_formula(
@@ -46,12 +45,6 @@ fn bench_formula(
         embed_glyphs: true,
         ..svg_opts.clone()
     };
-    let pdf_opts = ratex_pdf::PdfOptions {
-        font_size: render_opts.font_size as f64,
-        padding: render_opts.padding as f64,
-        stroke_width: 1.5,
-        font_dir: render_opts.font_dir.clone(),
-    };
     let layout_opts = LayoutOptions::default();
 
     // Warmup
@@ -62,14 +55,12 @@ fn bench_formula(
         let _ = render_to_png(&dl, render_opts);
         let _ = ratex_svg::render_to_svg(&dl, &svg_opts);
         let _ = ratex_svg::render_to_svg(&dl, &svg_standalone_opts);
-        let _ = ratex_pdf::render_to_pdf(&dl, &pdf_opts);
     }
 
     let mut total_parse_layout = 0u128;
     let mut total_png = 0u128;
     let mut total_svg = 0u128;
     let mut total_svg_standalone = 0u128;
-    let mut total_pdf = 0u128;
     let mut glyph_count = 0usize;
 
     for _ in 0..iters {
@@ -96,10 +87,6 @@ fn bench_formula(
         let t3 = Instant::now();
         let _ = ratex_svg::render_to_svg(&dl, &svg_standalone_opts);
         total_svg_standalone += t3.elapsed().as_micros();
-
-        let t4 = Instant::now();
-        let _ = ratex_pdf::render_to_pdf(&dl, &pdf_opts);
-        total_pdf += t4.elapsed().as_micros();
     }
 
     BenchResult {
@@ -110,7 +97,6 @@ fn bench_formula(
         png_us: total_png / iters as u128,
         svg_us: total_svg / iters as u128,
         svg_standalone_us: total_svg_standalone / iters as u128,
-        pdf_us: total_pdf / iters as u128,
     }
 }
 
@@ -470,10 +456,10 @@ fn bench_render_100() {
     println!("║  Per-category averages                                                                      ║");
     println!("╠══════════════════════════════╦══════╦══════════╦════════╦══════════════╦════════╦════════╣");
     println!(
-        "║ {:<28} ║ {:>4} ║ {:>8} ║ {:>6} ║ {:>12} ║ {:>6} ║ {:>6} ║",
-        "Category", "Cnt", "P+L(μs)", "PNG(μs)", "SVG-sa(μs)", "SVG(μs)", "PDF(μs)"
+        "║ {:<28} ║ {:>4} ║ {:>8} ║ {:>6} ║ {:>12} ║ {:>6} ║",
+        "Category", "Cnt", "P+L(μs)", "PNG(μs)", "SVG-sa(μs)", "SVG(μs)"
     );
-    println!("╠══════════════════════════════╬══════╬══════════╬════════╬══════════════╬════════╬════════╣");
+    println!("╠══════════════════════════════╬══════╬══════════╬════════╬══════════════╬════════╣");
 
     for cat in &["math", "complex", "matrix", "cjk", "emoji", "chem"] {
         let group: Vec<_> = results.iter().filter(|r| r.category == *cat).collect();
@@ -485,17 +471,15 @@ fn bench_render_100() {
         let png = group.iter().map(|r| r.png_us).sum::<u128>() / n;
         let svg = group.iter().map(|r| r.svg_us).sum::<u128>() / n;
         let svg_sa = group.iter().map(|r| r.svg_standalone_us).sum::<u128>() / n;
-        let pdf = group.iter().map(|r| r.pdf_us).sum::<u128>() / n;
         let _total_glyphs: usize = group.iter().map(|r| r.glyph_count).sum();
         println!(
-            "║ {:<28} ║ {:>4} ║ {:>7} ║ {:>5} ║ {:>10} ║ {:>5} ║ {:>5} ║",
+            "║ {:<28} ║ {:>4} ║ {:>7} ║ {:>5} ║ {:>10} ║ {:>5} ║",
             cat,
             group.len(),
             pl,
             png,
             svg_sa,
-            svg,
-            pdf
+            svg
         );
     }
 
@@ -505,17 +489,15 @@ fn bench_render_100() {
     let avg_png = results.iter().map(|r| r.png_us).sum::<u128>() / n;
     let avg_svg = results.iter().map(|r| r.svg_us).sum::<u128>() / n;
     let avg_svg_sa = results.iter().map(|r| r.svg_standalone_us).sum::<u128>() / n;
-    let avg_pdf = results.iter().map(|r| r.pdf_us).sum::<u128>() / n;
     let total_glyphs: usize = results.iter().map(|r| r.glyph_count).sum();
 
-    println!("╠══════════════════════════════╩══════╩══════════╩════════╩══════════════╩════════╩════════╣");
+    println!("╠══════════════════════════════╩══════╩══════════╩════════╩══════════════╩════════╣");
     println!("║  OVERALL ({n} formulas, {total_glyphs} glyphs, wall time {total_wall}ms)                                          ║");
     println!("╠══════════════════════════════════════════════════════════════════════════════════════════════╣");
     println!("║  Parse+Layout avg:        {:>5} μs                                                           ║", avg_pl);
     println!("║  PNG avg:                 {:>5} μs                                                           ║", avg_png);
     println!("║  SVG avg (text):          {:>5} μs                                                           ║", avg_svg);
     println!("║  SVG standalone avg:      {:>5} μs                                                           ║", avg_svg_sa);
-    println!("║  PDF avg:                 {:>5} μs                                                           ║", avg_pdf);
     println!("║  End-to-end (PL+PNG):     {:>5} μs                                                           ║", avg_pl + avg_png);
     println!("╠══════════════════════════════════════════════════════════════════════════════════════════════╣");
     println!("║  Throughput (end-to-end PNG): {:.1} formulas/sec                                                    ║",
