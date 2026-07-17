@@ -1,0 +1,65 @@
+name: Build RaTeX Windows Desktop FFI 8
+on:
+  push:
+    tags:
+      v*
+  workflow_dispatch:
+
+jobs:
+  build_windows_x64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install cbindgen
+        run: cargo install cbindgen --force
+
+      - name: Compile ratex-ffi cdylib
+        run: cargo build --release -p ratex-ffi --target x86_64-pc-windows-msvc
+        env:
+          RUSTFLAGS: ""
+
+      # 【关键调试：打印所有编译输出目录，看dll在哪】
+      - name: Debug print target folder tree
+        run: |
+          Write-Host "===== 打印target根目录 ====="
+          Get-ChildItem ./target -Recurse -Filter *.dll
+
+      - name: Generate ratex.h header
+        run: cbindgen ./crates/ratex-ffi -o ./ratex.h
+
+      - name: Package artifacts
+        run: |
+          New-Item -Path ./dist -ItemType Directory -Force
+          New-Item -Path ./dist/fonts -ItemType Directory -Force
+
+          # 自动搜索ratex.dll，不用手写固定路径，彻底规避大小写/目录问题
+          $dllPath = Get-ChildItem ./target -Recurse -Name "ratex.dll" | Select-Object -First 1
+          if (-not $dllPath) {
+            throw "编译后未找到ratex.dll，编译失败！"
+          }
+          Copy-Item (Join-Path ./target $dllPath) ./dist/
+
+          Copy-Item ./ratex.h ./dist/
+          Copy-Item ./fonts/* ./dist/fonts/ -Recurse -Force
+
+      - name: Upload CI Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ratex-windows-x64-desktop-ffi
+          path: ./dist/
+
+      - name: Publish to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
