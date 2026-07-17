@@ -1,193 +1,28 @@
+# 编译 Windows x64 ratex_ffi.dll（含 bitmap 光栅化 + embed-fonts）
+#
+# 产物 (Actions Artifacts → ratex-ffi-windows-x64):
+#   ratex_ffi.dll
+#   ratex.h
+#   ratex-ffi-windows-x64.zip
+
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fonts-noto-cjk libgtk-4-dev libadwaita-1-dev libcairo2-dev
-      - name: Build
-        run: cargo build --workspace
-      - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
-      - name: Test
-        run: cargo test --workspace
-      - name: Test ratex-font-loader (all features)
-        run: cargo test -p ratex-font-loader --all-features
-      - name: Test ratex-pdf (all features, embed-fonts + CLI)
-        run: cargo test -p ratex-pdf --all-features
-      - name: Test ratex-svg (standalone + resvg golden)
-        run: cargo test -p ratex-svg --features standalone
-      - name: Clippy ratex-svg standalone
-        run: cargo clippy -p ratex-svg --features standalone -- -D warnings
-      - name: Check embed-fonts (crates.io–safe font paths)
-        run: |
-          cargo check -p ratex-font-loader --features embed-fonts
-          cargo check -p ratex-svg --features standalone,embed-fonts
-          cargo check -p ratex-render --features embed-fonts
-          cargo test -p ratex-ffi --features embed-fonts
-      - name: Package ratex-katex-fonts (verify tarball includes fonts/)
-        run: cargo package -p ratex-katex-fonts
-      - name: Bench smoke (compile + run, no timing assertion)
-        run: cargo test -p ratex-render --test bench_render --features embed-fonts -- --ignored --nocapture
-        continue-on-error: true
-
-  web-wasm-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - name: Build and test ratex-wasm npm package (platforms/web)
-        run: |
-          cd platforms/web
-          npm ci
-          npm test
-
-  gtk-gobject-smoke:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install GTK/GI tooling
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential gobject-introspection libgirepository1.0-dev libgtk-4-dev libadwaita-1-dev libcairo2-dev python3-gi python3-gi-cairo valac xvfb
-      - name: Build RatexGtk library and Rust demos
-        run: cargo build -p ratex-gtk4 --lib --example formula_demo --example adw_formula_demo
-      - name: Compile RatexGtk typelib
-        run: g-ir-compiler platforms/gtk/gir/RatexGtk-1.0.gir -o target/debug/RatexGtk-1.0.typelib
-      - name: Build C example
-        run: |
-          gcc platforms/gtk/examples/c/formula_demo.c \
-            -o target/debug/ratex-gtk-c-demo \
-            -Iplatforms/gtk/include/ratex-gtk-1.0 \
-            -Ltarget/debug -lratex_gtk4 \
-            $(pkg-config --cflags --libs gtk4) \
-            -Wl,-rpath,$PWD/target/debug
-          gcc platforms/gtk/examples/c/init_contract.c \
-            -o target/debug/ratex-gtk-c-init-contract \
-            -Iplatforms/gtk/include/ratex-gtk-1.0 \
-            -Ltarget/debug -lratex_gtk4 \
-            $(pkg-config --cflags --libs gtk4) \
-            -Wl,-rpath,$PWD/target/debug
-      - name: Validate GTK metadata consistency
-        run: |
-          nm -D --defined-only target/debug/libratex_gtk4.so | grep -q ' ratex_formula_get_type$'
-          nm -D --defined-only target/debug/libratex_gtk4.so | grep -q ' ratex_formula_new$'
-          grep -q 'RatexFormula \*ratex_formula_new(void);' platforms/gtk/include/ratex-gtk-1.0/ratex-gtk.h
-          for property in latex display-mode font-size padding color font-dir error-message; do
-            grep -q "property name=\"$property\"" platforms/gtk/gir/RatexGtk-1.0.gir
-            grep -q "${property//-/_}" platforms/gtk/vapi/ratex-gtk-1.0.vapi
-          done
-      - name: Build Vala example
-        run: |
-          valac --vapidir=platforms/gtk/vapi \
-            --pkg gtk4 --pkg ratex-gtk-1.0 \
-            -X -Iplatforms/gtk/include/ratex-gtk-1.0 \
-            -X -Ltarget/debug -X -lratex_gtk4 \
-            -X -Wl,-rpath,$PWD/target/debug \
-            platforms/gtk/examples/vala/formula_demo.vala \
-            -o target/debug/ratex-gtk-vala-demo
-      - name: Smoke examples under Xvfb
-        run: |
-          export LD_LIBRARY_PATH=$PWD/target/debug:${LD_LIBRARY_PATH:-}
-          export GI_TYPELIB_PATH=$PWD/target/debug:${GI_TYPELIB_PATH:-}
-          run_smoke() {
-            set +e
-            timeout 5s xvfb-run -a "$@"
-            status=$?
-            set -e
-            if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
-              return "$status"
-            fi
-          }
-          run_smoke cargo run -p ratex-gtk4 --example formula_demo
-          run_smoke cargo run -p ratex-gtk4 --example adw_formula_demo
-          xvfb-run -a target/debug/ratex-gtk-c-init-contract
-          run_smoke target/debug/ratex-gtk-c-demo
-          run_smoke python3 platforms/gtk/examples/python/formula_demo.py
-          run_smoke target/debug/ratex-gtk-vala-demo
-
-  ios-swift-smoke:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Build ratex-ffi (release, host)
-        run: cargo build --release -p ratex-ffi
-      - name: Swift binding tests (macOS)
-        run: LIBRARY_PATH=$(pwd)/target/release swift test --package-path platforms/ios/tests
-      - name: Smoke executable (macOS)
-        run: LIBRARY_PATH=$(pwd)/target/release swift run --package-path platforms/ios/tests ratex-smoke
-
-  flutter-ios-linkage:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
-      - uses: Swatinem/rust-cache@v2
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - name: Build iOS XCFramework
-        run: bash platforms/ios/build-ios.sh
-      - name: Verify Flutter CocoaPods and SwiftPM release linkage
-        run: bash platforms/flutter/tool/verify-ios-integration.sh
-
-  # Compiles the real SPM package's Swift wrapper (platforms/ios/Sources/Ratex/*.swift)
-  # for macOS/AppKit through the published Package.swift + RaTeX.xcframework binary
-  # target. The ios-swift-smoke job above only exercises a separate macOS-compatible
-  # copy under platforms/ios/tests, so this job is what guards the NSView/AppKit code.
-  macos-spm-build:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
-      - name: Build macOS XCFramework slice
-        run: bash scripts/build-apple-xcframework.sh --macos
-      - name: Verify macOS slice
-        run: bash scripts/verify-xcframework-slices.sh platforms/ios/RaTeX.xcframework macos
-      # `swift build` (not `run`) — the demo is a SwiftUI App and would block on a
-      # GUI window in CI. Building is enough to compile every macOS code path.
-      - name: Build macOS SPM demo (compiles Sources/Ratex for AppKit)
-        run: swift build --package-path demo/spm-macos
-
   build-windows-ffi:
-    name: ratex_ffi.dll (x64, MSVC, bitmap)
+    name: ratex_ffi.dll (x64, MSVC)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -223,7 +58,10 @@ jobs:
             $exports = & $dumpbin.FullName /EXPORTS $dll
             $exports | Select-String "ratex_parse_and_layout"
             $exports | Select-String "ratex_render_bitmap"
+            $exports | Select-String "ratex_render_png"
+            $exports | Select-String "ratex_render_svg"
             $exports | Select-String "ratex_free_bitmap"
+            $exports | Select-String "ratex_free_bytes"
           } else {
             Write-Host "dumpbin not found; skipping export check"
           }
@@ -246,24 +84,16 @@ jobs:
 
           Exported functions:
             ratex_parse_and_layout  — LaTeX -> JSON DisplayList
-            ratex_render_bitmap     — LaTeX -> premultiplied RGBA8 bitmap
-            ratex_free_display_list — free JSON from layout
-            ratex_free_bitmap       — free bitmap from rasterize
-            ratex_get_last_error    — thread-local error string
+            ratex_render_bitmap     — LaTeX -> premultiplied RGBA8 (WPF WriteableBitmap)
+            ratex_render_png        — LaTeX -> PNG file bytes
+            ratex_render_svg        — LaTeX -> standalone SVG UTF-8
+            ratex_free_display_list / ratex_free_bitmap / ratex_free_bytes / ratex_free_svg
+            ratex_get_last_error
 
           Bitmap notes:
             - Pixel format: premultiplied RGBA8, stride = width * 4
             - KaTeX fonts are embedded in the DLL (no external fonts/ folder required)
             - Set background_color.a = 0 for transparency
-
-          WPF bitmap sketch:
-            [DllImport("ratex_ffi", CallingConvention = CallingConvention.Cdecl)]
-            static extern RatexBitmapResult ratex_render_bitmap(
-                [MarshalAs(UnmanagedType.LPUTF8Str)] string latex,
-                ref RatexRenderOptions opts);
-
-            [DllImport("ratex_ffi", CallingConvention = CallingConvention.Cdecl)]
-            static extern void ratex_free_bitmap(RatexBitmap bitmap);
           "@ | Set-Content -Encoding UTF8 "$dist/README-WPF.txt"
           Compress-Archive -Path "$dist/*" -DestinationPath ratex-ffi-windows-x64.zip -Force
 

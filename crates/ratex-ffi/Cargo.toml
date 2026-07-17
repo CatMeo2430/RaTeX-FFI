@@ -16,11 +16,12 @@ ratex-types  = { workspace = true }
 ratex-parser = { workspace = true }
 ratex-layout = { workspace = true }
 ratex-render = { path = "../ratex-render", features = ["embed-fonts"] }
+ratex-svg    = { path = "../ratex-svg", features = ["embed-fonts"] }
 serde_json = { workspace = true }
 
 [features]
 default = ["embed-fonts"]
-embed-fonts = ["ratex-render/embed-fonts"]
+embed-fonts = ["ratex-render/embed-fonts", "ratex-svg/embed-fonts"]
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { version = "0.21", default-features = false }
