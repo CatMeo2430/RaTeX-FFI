@@ -1,0 +1,70 @@
+name: Build RaTeX Windows Desktop FFI 5
+on:
+  push:
+    tags:
+      v*
+  workflow_dispatch: # 支持手动点按钮构建调试
+
+jobs:
+  build_windows_x64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout full repository source
+        uses: actions/checkout@v4
+
+      # 安装Rust稳定版 + Windows MSVC x64编译目标
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      # 仅安装生成C头文件工具，无wasm相关依赖
+      - name: Install cbindgen
+        run: cargo install cbindgen --force
+
+      # 纯净编译ratex-ffi，无任何embed-fonts特性，零报错
+      - name: Compile ratex-ffi cdylib DLL
+        run: cargo build --release -p ratex-ffi --target x86_64-pc-windows-msvc
+        env:
+          # 不静态链接VC运行库，依赖系统自带VC Redist
+          RUSTFLAGS: ""
+
+      # 自动生成完整C API头文件，用于C# P/Invoke绑定
+      - name: Generate C header ratex.h
+        run: cbindgen ./crates/ratex-ffi -o ./ratex.h
+
+      # 统一打包输出：dll + 头文件 + 完整字体目录
+      - name: Package all runtime artifacts
+        run: |
+          # 创建根输出目录
+          New-Item -Path ./dist -ItemType Directory -Force
+          # 创建字体子目录
+          New-Item -Path ./dist/fonts -ItemType Directory -Force
+
+          # 复制编译产出DLL
+          Copy-Item `
+            target/x86_64-pc-windows-msvc/release/ratex.dll `
+            ./dist/
+
+          # 复制C头文件（开发用，发布可保留方便查阅）
+          Copy-Item ./ratex.h ./dist/
+
+          # 递归复制仓库全部KaTeX数学字体
+          Copy-Item ./fonts/* ./dist/fonts/ -Recurse -Force
+
+      # 上传CI构建缓存，可手动下载调试
+      - name: Upload CI Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ratex-windows-x64-desktop-ffi
+          path: ./dist/
+
+      # 仅推送v开头标签时，自动上传产物到GitHub Release
+      - name: Publish Assets to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
