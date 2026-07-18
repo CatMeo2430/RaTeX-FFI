@@ -43,4 +43,8 @@ serde_json = "1.0"
 lto = true            # Full cross-crate link-time optimization, eliminates dead code
 codegen-units = 1     # Single codegen unit for maximum optimization
 panic = "abort"       # Remove unwinding machinery (gimli, addr2line, miniz_oxide, regex_lite)
-strip = "symbols"     # Strip all symbol tables from output binaries
+strip = "debuginfo"   # Keep PE export table; "symbols" breaks Windows cdylib P/Invoke
+
+# cdylib must retain exported symbols for P/Invoke (ratex_render_bitmap, etc.)
+[profile.release.package.ratex-ffi]
+strip = false
