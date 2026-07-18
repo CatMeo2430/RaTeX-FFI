@@ -60,13 +60,14 @@ def read_exports(path: Path) -> list[str]:
     if exp_off is None:
         raise ValueError(f"{path}: export directory RVA not mapped")
 
-    num_funcs, num_names, _addr_rva, name_ptr_rva, _ord_rva, _base = struct.unpack_from(
-        "<IIIIII", data, exp_off
-    )
+    # IMAGE_EXPORT_DIRECTORY layout (see PE-COFF spec)
+    num_funcs = struct.unpack_from("<I", data, exp_off + 20)[0]
+    num_names = struct.unpack_from("<I", data, exp_off + 24)[0]
+    name_ptr_rva = struct.unpack_from("<I", data, exp_off + 32)[0]
+
     if num_names == 0 or num_names > 10_000:
         raise ValueError(
-            f"{path}: corrupt export table (num_funcs={num_funcs}, num_names={num_names}). "
-            "Likely caused by strip=symbols on Windows cdylib."
+            f"{path}: invalid export name count (num_funcs={num_funcs}, num_names={num_names})"
         )
 
     names_off = rva_to_offset(data, name_ptr_rva, sections)
